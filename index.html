@@ -699,7 +699,7 @@ function viewReportForm(editId, duplicateFrom){
         <div class="row2">
           <div class="field">
             <label>מספר שעות *</label>
-            <input type="number" name="hours" step="0.25" min="0.01" placeholder="לדוגמה: 1.5" value="${esc(draft.hours)}" required>
+            <input type="number" name="hours" step="any" min="0" inputmode="decimal" placeholder="לדוגמה: 1.5" value="${esc(draft.hours)}" required>
           </div>
           <div class="field">
             <label>כמות שבוצעה</label>
@@ -1734,6 +1734,15 @@ document.addEventListener('input', (e)=>{
     const name = e.target.name;
     if(name && name!=='locationText') draft[name] = e.target.value;
     if(name==='locationText') draft.locationText = e.target.value;
+    // hours affects the live "man-hours" preview line — refresh it without losing focus
+    if(name==='hours' && draft.workerIds.length>1){
+      clearTimeout(document._hoursPreviewT);
+      document._hoursPreviewT = setTimeout(()=>{
+        render();
+        const el = document.querySelector('#reportForm [name=hours]');
+        if(el) el.focus();
+      }, 300);
+    }
   }
 });
 
