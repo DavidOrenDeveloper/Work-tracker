@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>יומן עבודה — ניהול ומעקב</title>
+<meta name="theme-color" content="#d98a12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="יומן עבודה">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f5f3ee;
+  --bg-grid: rgba(0,0,0,0.04);
+  --surface:#ffffff;
+  --surface-2:#f1efe8;
+  --surface-3:#e6e2d8;
+  --border:#d7d2c5;
+  --border-soft:#e5e1d6;
+  --text:#22262b;
+  --text-dim:#5d6670;
+  --text-faint:#8b9199;
+  --amber:#d98a12;
+  --amber-dim:#f6dfb0;
+  --steel:#2f6f8f;
+  --green:#2f9e5c;
+  --red:#c8434c;
+  --red-dim:#fbe3e4;
+  --radius:14px;
+  --radius-sm:9px;
+  font-size:16px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0/28px 28px,
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0/28px 28px,
+    var(--bg);
+  color:var(--text);
+  font-family:'Heebo', system-ui, -apple-system, sans-serif;
+  min-height:100vh;
+  padding-bottom:78px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mono{font-family:'JetBrains Mono', monospace;}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit;}
+.app{max-width:520px;margin:0 auto;padding:14px 14px 10px;}
+
+/* ---- App bar ---- */
+.appbar{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 4px 16px;
+}
+.appbar h1{font-size:19px;font-weight:800;margin:0;flex:1;letter-spacing:.2px;}
+.iconbtn{
+  width:38px;height:38px;border-radius:10px;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:18px;flex-shrink:0;
+}
+.iconbtn:active{background:var(--surface-3);}
+.backbtn{transform:scaleX(-1);}
+
+/* ---- Cards / surfaces ---- */
+.card{
+  background:var(--surface);border:1px solid var(--border-soft);
+  border-radius:var(--radius);padding:16px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,.03);
+}
+.section-title{font-size:13px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:18px 2px 8px;}
+
+/* ---- Home dashboard strip (signature element) ---- */
+.dash{
+  background:linear-gradient(145deg,#ffffff,#f3f0e8);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius);
+  padding:16px 16px 14px;
+  margin-bottom:16px;
+  position:relative;
+  overflow:hidden;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.dash::before{
+  content:"";position:absolute;inset:0;
+  background: repeating-linear-gradient(90deg, rgba(217,138,18,.07) 0 1px, transparent 1px 24px);
+  pointer-events:none;
+}
+.dash-label{font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:10px;}
+.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;position:relative;}
+.dash-item{text-align:center;}
+.dash-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1;}
+.dash-sub{font-size:10.5px;color:var(--text-faint);margin-top:5px;}
+
+/* ---- Home tiles ---- */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.tile{
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);
+  padding:16px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;
+  cursor:pointer;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.03);
+}
+.tile:active{background:var(--surface-2);}
+.tile .ic{font-size:24px;}
+.tile .lb{font-size:13px;font-weight:600;color:var(--text);}
+.tile.primary{
+  grid-column:1/-1;background:linear-gradient(135deg,#ffb020,#e8942a);color:#1a1400;border:none;
+  flex-direction:row;justify-content:center;padding:18px;
+}
+.tile.primary .lb{color:#1a1400;font-size:16px;font-weight:800;}
+.tile.primary .ic{font-size:22px;}
+
+/* ---- Bottom nav ---- */
+.bottomnav{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+  border-top:1px solid var(--border-soft);
+  display:flex;justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));
+  box-shadow:0 -1px 6px rgba(0,0,0,.04);
+}
+.navbtn{
+  background:none;border:none;color:var(--text-faint);display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:6px 10px;border-radius:10px;cursor:pointer;font-size:10.5px;font-weight:600;
+}
+.navbtn.active{color:var(--amber);}
+.navbtn .ic{font-size:19px;}
+
+/* ---- Forms ---- */
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--text-dim);margin-bottom:6px;}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;}
+.field-label-row label{margin-bottom:6px;}
+.addlink{background:none;border:none;color:var(--amber);font-size:12px;font-weight:700;cursor:pointer;padding:0 0 6px;}
+.field .hint{font-size:11px;color:var(--text-faint);margin-top:4px;}
+input[type=text],input[type=date],input[type=number],select,textarea,input[type=search]{
+  width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius-sm);padding:11px 12px;font-size:15px;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--amber);}
+textarea{resize:vertical;min-height:64px;}
+select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.chipset{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.chip{
+  background:var(--surface-3);border:1px solid var(--border);color:var(--text);
+  border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;
+}
+.chip .x{cursor:pointer;color:var(--red);font-weight:800;}
+.selectbtn{
+  width:100%;text-align:right;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius-sm);padding:11px 12px;font-size:15px;cursor:pointer;
+}
+.selectbtn.placeholder{color:var(--text-faint);}
+
+/* ---- Buttons ---- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-sm);padding:12px 16px;font-size:15px;font-weight:700;border:none;cursor:pointer;width:100%;
+}
+.btn-primary{background:var(--amber);color:#1a1400;}
+.btn-primary:active{background:#e8a015;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-outline:active{background:var(--surface-2);}
+.btn-danger{background:var(--red-dim);color:#a8232e;border:1px solid #f0c1c4;}
+.btn-ghost{background:transparent;color:var(--text-dim);}
+.btn-sm{padding:8px 12px;font-size:13px;width:auto;}
+.btnrow{display:flex;gap:8px;}
+.btnrow .btn{flex:1;}
+.fab{
+  position:fixed;left:16px;bottom:82px;z-index:35;
+  width:56px;height:56px;border-radius:50%;background:var(--amber);color:#1a1400;
+  display:flex;align-items:center;justify-content:center;font-size:26px;border:none;box-shadow:0 6px 18px rgba(0,0,0,.4);cursor:pointer;
+}
+
+/* ---- Lists ---- */
+.list-row{
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;
+}
+.list-row:active{background:var(--surface-2);}
+.list-row .main{flex:1;min-width:0;}
+.list-row .title{font-weight:700;font-size:14.5px;}
+.list-row .meta{font-size:12px;color:var(--text-faint);margin-top:2px;}
+.badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--text-dim);font-weight:700;}
+.badge.off{background:var(--red-dim);color:#a8323c;}
+.badge.on{background:#dff3e6;color:#1f7a43;}
+.arrow{color:var(--text-faint);font-size:15px;}
+
+/* ---- report card in history ---- */
+.rcard{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.03);}
+.rcard-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.rcard-date{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--amber);font-weight:700;}
+.rcard-tags{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
+.tag{font-size:11px;background:var(--surface-3);color:var(--text-dim);padding:3px 9px;border-radius:999px;}
+.rcard-desc{font-size:13.5px;color:var(--text);margin:6px 0;}
+.rcard-stats{display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--text-dim);}
+.rcard-stats b{color:var(--text);font-family:'JetBrains Mono',monospace;}
+.rcard-workers{font-size:12px;color:var(--text-faint);margin-top:6px;}
+.rcard-actions{display:flex;gap:6px;margin-top:10px;}
+.iconlink{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer;flex:1;text-align:center;}
+.iconlink:active{background:var(--surface-3);}
+.iconlink.danger{color:#b52430;border-color:#f0c1c4;background:var(--red-dim);}
+
+/* ---- filters ---- */
+.filterbar{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;}
+.filterbar::-webkit-scrollbar{display:none;}
+.fchip{flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);padding:8px 14px;border-radius:999px;font-size:13px;cursor:pointer;white-space:nowrap;}
+.fchip.active{background:var(--amber);color:#1a1400;border-color:var(--amber);font-weight:700;}
+.filterpanel{display:none;}
+.filterpanel.open{display:block;}
+
+/* ---- tabs ---- */
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;}
+.tabbtn{flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;}
+.tabbtn.active{background:var(--steel);border-color:var(--steel);color:#fff;}
+
+/* ---- table ---- */
+table.rtable{width:100%;border-collapse:collapse;font-size:13px;}
+table.rtable th{text-align:right;color:var(--text-faint);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px 6px;border-bottom:1px solid var(--border-soft);}
+table.rtable td{padding:9px 6px;border-bottom:1px solid var(--border-soft);}
+table.rtable td.num{font-family:'JetBrains Mono',monospace;}
+table.rtable tr:last-child td{border-bottom:none;}
+
+/* ---- modal ---- */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
+.overlay.center{align-items:center;padding:20px;}
+.sheet{
+  background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;
+  width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:18px 16px calc(20px + env(safe-area-inset-bottom));
+}
+.overlay.center .sheet{border-radius:16px;max-height:80vh;}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sheet-head h3{margin:0;font-size:16px;font-weight:800;}
+.closebtn{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:15px;}
+.search-in-modal{margin-bottom:10px;}
+.msel-row{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--border-soft);cursor:pointer;}
+.msel-row:last-child{border-bottom:none;}
+.msel-check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.msel-row.checked .msel-check{background:var(--amber);border-color:var(--amber);color:#1a1400;font-weight:800;}
+.msel-row .lbl{flex:1;font-size:14.5px;}
+.msel-row .sub{font-size:11px;color:var(--text-faint);}
+
+/* ---- toast ---- */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--surface-3);border:1px solid var(--border);color:var(--text);padding:11px 18px;border-radius:999px;font-size:13.5px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.4);}
+#toast.show{opacity:1;}
+
+/* ---- misc ---- */
+.empty{text-align:center;padding:40px 16px;color:var(--text-faint);}
+.empty .ic{font-size:34px;margin-bottom:10px;}
+.divider{height:1px;background:var(--border-soft);margin:14px 0;}
+.small-note{font-size:11.5px;color:var(--text-faint);}
+.storagewarn{
+  background:#fdecea;border:1px solid #f0b9bd;color:#a8232e;
+  padding:11px 14px;border-radius:10px;font-size:12.5px;margin-bottom:12px;line-height:1.6;
+}
+.storagewarn-link{display:block;font-weight:700;text-decoration:underline;cursor:pointer;margin-top:4px;}
+.summary-hero{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+.hero-item{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:14px;text-align:center;}
+.hero-num{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--amber);}
+.hero-lb{font-size:11.5px;color:var(--text-dim);margin-top:4px;}
+.thumb{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px;border:1px solid var(--border);}
+.imgpreview{position:relative;margin-top:8px;}
+.imgpreview .rm{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.6);color:#fff;border:none;width:26px;height:26px;border-radius:50%;font-size:14px;cursor:pointer;}
+a{color:var(--amber);}
+.reorder-btns{display:flex;flex-direction:column;gap:2px;}
+.reorder-btns button{background:var(--surface-3);border:1px solid var(--border);color:var(--text-dim);width:24px;height:22px;border-radius:5px;font-size:11px;cursor:pointer;line-height:1;}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================== UTILITIES ============================== */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const todayStr = () => new Date().toISOString().slice(0,10);
+const esc = (s) => (s===undefined||s===null) ? "" : String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fmtDateHe(d){
+  if(!d) return "";
+  const [y,m,dd] = d.split("-");
+  return `${dd}/${m}/${y}`;
+}
+function fmtNum(n, decimals=2){
+  if(n===null||n===undefined||isNaN(n)) return "0";
+  const r = Math.round(n*100)/100;
+  return (r % 1 === 0) ? String(r) : r.toFixed(decimals).replace(/0+$/,"").replace(/\.$/,"");
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function weekRange(dateStr){
+  const d = new Date(dateStr+"T00:00:00");
+  const day = d.getDay(); // 0=Sun
+  const start = new Date(d); start.setDate(d.getDate()-day);
+  const end = new Date(start); end.setDate(start.getDate()+6);
+  return [start.toISOString().slice(0,10), end.toISOString().slice(0,10)];
+}
+function monthRange(dateStr){
+  const [y,m] = dateStr.split("-").map(Number);
+  const start = `${y}-${String(m).padStart(2,'0')}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const end = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return [start,end];
+}
+function inRange(date, start, end){ return date >= start && date <= end; }
+
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 640;
+        const scale = Math.min(1, maxW/img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width*scale;
+        canvas.height = img.height*scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ============================== STORAGE LAYER ============================== */
+const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports"];
+const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[] };
+
+/* Fully standalone, offline-capable persistence — no server, no account,
+   no external APIs. Primary store is IndexedDB (large capacity, works
+   fully offline, supported by every modern mobile/desktop browser).
+   If IndexedDB is ever unavailable (e.g. certain private-browsing modes),
+   it falls back automatically to localStorage so the app still saves data. */
+const IDB_NAME = 'workTrackerDB';
+const IDB_STORE = 'kv';
+let _idbPromise = null;
+function openIdb(){
+  if(_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject)=>{
+    if(!window.indexedDB){ reject(new Error('IndexedDB not supported')); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _idbPromise;
+}
+function lsGet(key){
+  try{ const v = localStorage.getItem('wt:'+key); return v ? JSON.parse(v) : null; }
+  catch(e){ return null; }
+}
+function lsSet(key, val){
+  try{ localStorage.setItem('wt:'+key, JSON.stringify(val)); return true; }
+  catch(e){ return false; }
+}
+
+/* All storage calls are funneled through a single serial queue so writes
+   never overlap, with automatic retries on failure. */
+let _storageChain = Promise.resolve();
+function _queued(op){
+  const run = () => op();
+  const result = _storageChain.then(run, run);
+  _storageChain = result.then(()=>{}, ()=>{});
+  return result;
+}
+function _wait(ms){ return new Promise(res=>setTimeout(res, ms)); }
+
+/* Tracks whether persistence is currently working. If storage keeps failing,
+   the app must NOT block the UI or spam repeated error toasts — it keeps
+   working fully in-memory and shows one clear, persistent banner instead,
+   with a shortcut to manually export a backup as a safety net. */
+const storageStatus = { healthy:true };
+let _storageWarnShown = false;
+function noteStorageFailure(key, err){
+  console.error('storage set failed', key, err);
+  storageStatus.healthy = false;
+  if(!_storageWarnShown){
+    _storageWarnShown = true;
+    toast('שמירה אוטומטית לא זמינה כרגע — העבודה ממשיכה בזיכרון זמני');
+  }
+}
+function noteStorageSuccess(){
+  if(!storageStatus.healthy){
+    storageStatus.healthy = true;
+    _storageWarnShown = false;
+    toast('החיבור לאחסון חזר — הנתונים נשמרים כרגיל');
+    render();
+  }
+}
+
+async function _storGetRaw(key){
+  try{
+    const db = await openIdb();
+    const raw = await new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    if(raw !== undefined && raw !== null) return JSON.parse(raw);
+    return lsGet(key); // nothing in IndexedDB yet — check the fallback store too
+  }catch(e){
+    return lsGet(key);
+  }
+}
+async function _storSetRaw(key, val, attempt=0){
+  try{
+    const db = await openIdb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(JSON.stringify(val), key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    noteStorageSuccess();
+    return true;
+  }catch(e){
+    if(attempt < 2){ await _wait(300*(attempt+1)); return _storSetRaw(key, val, attempt+1); }
+    if(lsSet(key, val)){ noteStorageSuccess(); return true; } // last-resort fallback
+    noteStorageFailure(key, e);
+    return false;
+  }
+}
+function storGet(key){ return _queued(()=>_storGetRaw(key)); }
+function storSet(key, val){ return _queued(()=>_storSetRaw(key, val)); }
+async function saveCollection(name){ return storSet(name, DB[name]); }
+async function saveAllCollections(){
+  let ok = true;
+  for(const c of COLLECTIONS){ const r = await saveCollection(c); if(!r) ok = false; }
+  return ok;
+}
+
+async function loadAll(){
+  for(const c of COLLECTIONS){
+    const v = await storGet(c);
+    if(v) DB[c] = v;
+  }
+  if(DB.categories.length===0 && DB.workTypes.length===0 && DB.units.length===0){
+    seedDefaults();
+    // Never block the first paint on this — save in the background regardless of outcome.
+    saveAllCollections().finally(render);
+  }
+}
+
+function seedDefaults(){
+  const cats = [
+    {name:"חשמל"}, {name:"תשתיות"}, {name:"התקנות"}, {name:"עבודות הכנה"}
+  ].map((c,i)=>({id:uid(), name:c.name, active:true, order:i, createdAt:Date.now()}));
+  DB.categories = cats;
+  const byName = n => cats.find(c=>c.name===n).id;
+  const wts = [
+    ["התקנת תעלות","חשמל"], ["השחלת כבלים","חשמל"], ["התקנת גופי תאורה","חשמל"],
+    ["התקנת לוחות","חשמל"], ["סימון","עבודות הכנה"], ["חציבות","תשתיות"]
+  ].map(([name,cat],i)=>({id:uid(), name, categoryId:byName(cat), active:true, order:i, createdAt:Date.now()}));
+  DB.workTypes = wts;
+  DB.units = ["מטר","יחידות","נקודות","קומפלט",'מ"ר',"ללא יחידה"].map((name,i)=>({id:uid(),name,active:true,order:i,createdAt:Date.now()}));
+  DB.locations = [];
+  DB.workers = [];
+}
+
+/* ============================== STATE ============================== */
+const state = {
+  route: {name:"home"},
+  historyFilters: { text:"", dateFrom:"", dateTo:"", workerIds:[], categoryId:"", workTypeId:"", locationId:"", hoursMin:"", hoursMax:"", qtyMin:"", qtyMax:"" },
+  historySort: { field:"date", dir:"desc" },
+  reportsPeriod: { type:"month", date: todayStr(), from:"", to:"" },
+  reportsTab: "worker",
+  formDraft: null, // used for add/edit report
+};
+
+/* ============================== LOOKUP HELPERS ============================== */
+const byId = (arr,id) => arr.find(x=>x.id===id);
+const activeOf = (arr) => arr.filter(x=>x.active).sort((a,b)=>(a.order??0)-(b.order??0));
+const workerName = id => { const w=byId(DB.workers,id); return w? w.name : "(נמחק)"; };
+const categoryName = id => { const c=byId(DB.categories,id); return c? c.name : "(נמחק)"; };
+const workTypeName = id => { const w=byId(DB.workTypes,id); return w? w.name : "(נמחק)"; };
+const locationName = (id,text) => { if(text) return text; const l=byId(DB.locations,id); return l? l.name : (id? "(נמחק)" : "—"); };
+const unitName = id => { if(!id) return ""; const u=byId(DB.units,id); return u? u.name : ""; };
+
+function isEntityUsed(type, id){
+  return DB.reports.some(r=>{
+    if(type==='workers') return r.workerIds.includes(id);
+    if(type==='categories') return r.categoryId===id;
+    if(type==='workTypes') return r.workTypeId===id;
+    if(type==='locations') return r.locationId===id;
+    if(type==='units') return r.unitId===id;
+    return false;
+  });
+}
+
+/* ============================== RENDER ROOT ============================== */
+function render(){
+  const app = document.getElementById('app');
+  const r = state.route;
+  let html = "";
+  if(r.name==='home') html = viewHome();
+  else if(r.name==='addReport') html = viewReportForm(r.editId||null, r.duplicateFrom||null);
+  else if(r.name==='history') html = viewHistory();
+  else if(r.name==='reports') html = viewReports();
+  else if(r.name==='workers') html = viewEntityManager('workers');
+  else if(r.name==='catwt') html = viewCategoriesWorkTypes();
+  else if(r.name==='locunits') html = viewLocationsUnits();
+  else if(r.name==='settings') html = viewSettings();
+  app.innerHTML = (storageStatus.healthy ? '' : storageBanner()) + html + bottomNav();
+  window.scrollTo(0,0);
+}
+function storageBanner(){
+  return `<div class="storagewarn">⚠️ שמירה אוטומטית לא זמינה כרגע — הנתונים פעילים בזיכרון זמני של המסך ועלולים להימחק אם תסגור את האפליקציה.
+    <span class="storagewarn-link" data-action="exportBackup">בצע ייצוא גיבוי עכשיו ›</span></div>`;
+}
+
+/* ---- Navigation stack for Android hardware/gesture back button ----
+   Every screen change or modal open pushes one browser history entry.
+   Pressing back (popstate) pops our own stack instead of exiting the app. */
+const navStack = [];
+function go(routeObj){
+  navStack.push({kind:'route', route: state.route});
+  try{ history.pushState({nav:true}, '', location.href); }catch(e){}
+  state.route = routeObj;
+  render();
+}
+function pushModalHistory(){
+  navStack.push({kind:'modal'});
+  try{ history.pushState({nav:true}, '', location.href); }catch(e){}
+}
+function goBack(){
+  if(navStack.length){ history.back(); }
+  else { go({name:'home'}); }
+}
+window.addEventListener('popstate', ()=>{
+  if(!navStack.length) return; // nothing left in our stack; let the browser/app handle it
+  const entry = navStack.pop();
+  if(entry.kind==='modal'){
+    const mr = document.getElementById('modalRoot');
+    if(mr) mr.innerHTML = '';
+    render();
+  } else if(entry.kind==='route'){
+    state.route = entry.route;
+    render();
+  }
+});
+
+function bottomNav(){
+  const r = state.route.name;
+  const items = [
+    {name:'home', ic:'⌂', lb:'בית'},
+    {name:'addReport', ic:'✚', lb:'דיווח'},
+    {name:'history', ic:'☰', lb:'היסטוריה'},
+    {name:'reports', ic:'▤', lb:'דוחות'},
+  ];
+  return `<div class="bottomnav">${items.map(i=>`
+    <button class="navbtn ${r===i.name?'active':''}" data-nav="${i.name}">
+      <span class="ic">${i.ic}</span><span>${i.lb}</span>
+    </button>`).join('')}</div>`;
+}
+
+function appbar(title, opts={}){
+  return `<div class="appbar">
+    ${opts.back!==false ? `<button class="iconbtn backbtn" data-action="goBack">➜</button>` : ''}
+    <h1>${esc(title)}</h1>
+    ${opts.rightIcon ? `<button class="iconbtn" data-action="${opts.rightAction}">${opts.rightIcon}</button>`:''}
+  </div>`;
+}
+
+/* ============================== HOME ============================== */
+function viewHome(){
+  const today = todayStr();
+  const todays = DB.reports.filter(r=>r.date===today);
+  const workersToday = new Set(); todays.forEach(r=>r.workerIds.forEach(w=>workersToday.add(w)));
+  const hoursToday = todays.reduce((s,r)=>s+r.hours,0);
+  const manHoursToday = todays.reduce((s,r)=>s+r.hours*r.workerIds.length,0);
+
+  return `
+    ${appbar('יומן עבודה', {back:false})}
+    <div class="dash">
+      <div class="dash-label">סיכום היום · ${fmtDateHe(today)}</div>
+      <div class="dash-grid">
+        <div class="dash-item"><div class="dash-num">${workersToday.size}</div><div class="dash-sub">עובדים</div></div>
+        <div class="dash-item"><div class="dash-num">${fmtNum(hoursToday)}</div><div class="dash-sub">שעות</div></div>
+        <div class="dash-item"><div class="dash-num">${fmtNum(manHoursToday)}</div><div class="dash-sub">שעות אדם</div></div>
+        <div class="dash-item"><div class="dash-num">${todays.length}</div><div class="dash-sub">דיווחים</div></div>
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="tile primary" data-nav="addReport"><span class="ic">✚</span><span class="lb">הוסף דיווח</span></div>
+      <div class="tile" data-nav="history"><span class="ic">☰</span><span class="lb">היסטוריה</span></div>
+      <div class="tile" data-nav="reports"><span class="ic">▤</span><span class="lb">דוחות</span></div>
+      <div class="tile" data-nav="workers"><span class="ic">👤</span><span class="lb">עובדים</span></div>
+      <div class="tile" data-nav="catwt"><span class="ic">🏷</span><span class="lb">קטגוריות וסוגי עבודה</span></div>
+      <div class="tile" data-nav="locunits"><span class="ic">📍</span><span class="lb">מיקומים ויחידות</span></div>
+      <div class="tile" data-action="openExport"><span class="ic">⭳</span><span class="lb">ייצוא Excel</span></div>
+      <div class="tile" data-nav="settings"><span class="ic">⚙</span><span class="lb">הגדרות</span></div>
+    </div>
+  `;
+}
+
+/* ============================== ADD / EDIT REPORT FORM ============================== */
+function blankReport(){
+  return { id:null, date: todayStr(), workerIds:[], categoryId:"", workTypeId:"", description:"",
+    locationId:"", locationText:"", hours:"", quantity:"", unitId:"", notes:"", photo:null };
+}
+
+function viewReportForm(editId, duplicateFrom){
+  let draft;
+  if(state.formDraft && state.formDraft._formKey === (editId||duplicateFrom||'new')){
+    draft = state.formDraft;
+  } else if(editId){
+    const rep = byId(DB.reports, editId);
+    draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
+    draft._formKey = editId;
+    draft._editId = editId;
+  } else if(duplicateFrom){
+    const rep = byId(DB.reports, duplicateFrom);
+    draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
+    draft.id = null; draft.date = todayStr();
+    draft._formKey = duplicateFrom;
+  } else {
+    draft = blankReport();
+    draft._formKey = 'new';
+  }
+  state.formDraft = draft;
+
+  const cats = activeOf(DB.categories);
+  const wts = activeOf(DB.workTypes).filter(w => !draft.categoryId || w.categoryId===draft.categoryId);
+  const locs = activeOf(DB.locations);
+  const units = activeOf(DB.units);
+  const manHours = draft.hours && draft.workerIds.length ? (parseFloat(draft.hours)*draft.workerIds.length) : 0;
+
+  return `
+    ${appbar(editId ? 'עריכת דיווח' : 'דיווח עבודה חדש')}
+    <form id="reportForm">
+      <div class="card">
+        <div class="field">
+          <label>תאריך *</label>
+          <input type="date" name="date" value="${esc(draft.date)}" required>
+        </div>
+
+        <div class="field">
+          <label>עובדים * (${draft.workerIds.length} נבחרו)</label>
+          <button type="button" class="selectbtn ${draft.workerIds.length?'':'placeholder'}" data-action="openWorkerPicker">
+            ${draft.workerIds.length ? 'ערוך בחירת עובדים' : 'בחר עובדים…'}
+          </button>
+          <div class="chipset">
+            ${draft.workerIds.map(id=>`<span class="chip">${esc(workerName(id))} <span class="x" data-action="removeWorkerChip" data-id="${id}">×</span></span>`).join('')}
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <div class="field-label-row"><label>קטגוריה *</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="category">✚ חדשה</button></div>
+            <select name="categoryId" required>
+              <option value="">בחר…</option>
+              ${cats.map(c=>`<option value="${c.id}" ${draft.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <div class="field-label-row"><label>סוג עבודה *</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="workType">✚ חדש</button></div>
+            <select name="workTypeId" required>
+              <option value="">בחר…</option>
+              ${wts.map(w=>`<option value="${w.id}" ${draft.workTypeId===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>תיאור עבודה</label>
+          <textarea name="description" placeholder="פירוט חופשי…">${esc(draft.description)}</textarea>
+        </div>
+
+        <div class="field">
+          <label>מיקום / אזור</label>
+          <select name="locationId">
+            <option value="">— ללא —</option>
+            ${locs.map(l=>`<option value="${l.id}" ${draft.locationId===l.id && !draft.locationText?'selected':''}>${esc(l.name)}</option>`).join('')}
+            <option value="__free__" ${draft.locationText?'selected':''}>טקסט חופשי…</option>
+          </select>
+          <input type="text" name="locationText" placeholder="הקלד מיקום…" style="margin-top:8px; ${draft.locationText?'':'display:none'}" value="${esc(draft.locationText)}">
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label>מספר שעות *</label>
+            <input type="number" name="hours" step="0.25" min="0.01" placeholder="לדוגמה: 1.5" value="${esc(draft.hours)}" required>
+          </div>
+          <div class="field">
+            <label>כמות שבוצעה</label>
+            <input type="number" name="quantity" step="any" min="0" placeholder="אופציונלי" value="${esc(draft.quantity)}">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>יחידת מידה</label>
+          <select name="unitId">
+            <option value="">— ללא —</option>
+            ${units.map(u=>`<option value="${u.id}" ${draft.unitId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
+          </select>
+        </div>
+
+        ${draft.workerIds.length>1 ? `<div class="small-note">👥 ${draft.workerIds.length} עובדים × ${fmtNum(draft.hours||0)} שעות = <b class="mono">${fmtNum(manHours)}</b> שעות אדם</div>` : ''}
+
+        <div class="field" style="margin-top:14px;">
+          <label>הערות</label>
+          <textarea name="notes" placeholder="אופציונלי…">${esc(draft.notes)}</textarea>
+        </div>
+
+        <div class="field">
+          <label>תמונה (אופציונלי)</label>
+          ${draft.photo ? `<div class="imgpreview"><img class="thumb" src="${draft.photo}"><button type="button" class="rm" data-action="removePhoto">✕</button></div>`
+            : `<input type="file" accept="image/*" capture="environment" id="photoInput">`}
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button type="button" class="btn btn-outline" data-nav="home">ביטול</button>
+        <button type="submit" class="btn btn-primary">${editId?'שמור שינויים':'שמור דיווח'}</button>
+      </div>
+      ${editId ? `<button type="button" class="btn btn-danger" style="margin-top:10px;" data-action="deleteReport" data-id="${editId}">מחק דיווח</button>` : ''}
+    </form>
+  `;
+}
+
+/* ============================== WORKER PICKER MODAL ============================== */
+function openWorkerPicker(){
+  pushModalHistory();
+  const search = "";
+  renderWorkerPickerModal(search);
+}
+function renderWorkerPickerModal(search){
+  const draft = state.formDraft;
+  const workers = activeOf(DB.workers).filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
+  const html = `
+    <div class="overlay" id="workerModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>בחירת עובדים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <input type="search" class="search-in-modal" id="workerSearchInput" placeholder="חיפוש עובד…" value="${esc(search)}">
+        <div id="workerListWrap">
+          ${workers.length===0 ? `<div class="empty"><div class="ic">👤</div>אין עובדים פעילים תואמים</div>` :
+            workers.map(w=>{
+              const checked = draft.workerIds.includes(w.id);
+              return `<div class="msel-row ${checked?'checked':''}" data-action="toggleWorker" data-id="${w.id}">
+                <div class="msel-check">${checked?'✓':''}</div>
+                <div class="lbl">${esc(w.name)}</div>
+              </div>`;
+            }).join('')
+          }
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${draft.workerIds.length} נבחרו)</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('workerSearchInput').addEventListener('input', e=>{
+    renderWorkerPickerModal(e.target.value);
+    document.getElementById('workerSearchInput').focus();
+  });
+}
+
+/* ============================== QUICK ADD (category / work type from within report form) ============================== */
+function openQuickAdd(kind){
+  pushModalHistory();
+  const draft = state.formDraft;
+  const cats = activeOf(DB.categories);
+  const html = `<div class="overlay" id="quickAddOverlay">
+    <div class="sheet">
+      <div class="sheet-head"><h3>${kind==='category' ? 'קטגוריה חדשה' : 'סוג עבודה חדש'}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <form id="quickAddForm">
+        <div class="field"><label>שם *</label><input type="text" name="name" required></div>
+        ${kind==='workType' ? `<div class="field"><label>קטגוריה</label>
+          <select name="categoryId">
+            <option value="">— ללא —</option>
+            ${cats.map(c=>`<option value="${c.id}" ${draft.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        <button type="submit" class="btn btn-primary">הוסף ובחר</button>
+      </form>
+    </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('modalRoot')._quickAddKind = kind;
+  const nameInput = document.querySelector('#quickAddForm [name=name]');
+  if(nameInput) nameInput.focus();
+}
+async function submitQuickAddForm(form){
+  const kind = document.getElementById('modalRoot')._quickAddKind;
+  const fd = new FormData(form);
+  const name = (fd.get('name')||'').trim();
+  if(!name){ toast('שם הוא שדה חובה'); return; }
+  const draft = state.formDraft;
+  if(kind==='category'){
+    const obj = {id:uid(), name, active:true, order:DB.categories.length, createdAt:Date.now()};
+    DB.categories.push(obj);
+    await saveCollection('categories');
+    draft.categoryId = obj.id;
+    draft.workTypeId = ""; // category changed, previous work type may not match
+  } else {
+    const categoryId = fd.get('categoryId') || "";
+    const obj = {id:uid(), name, categoryId, active:true, order:DB.workTypes.length, createdAt:Date.now()};
+    DB.workTypes.push(obj);
+    await saveCollection('workTypes');
+    draft.workTypeId = obj.id;
+    if(categoryId) draft.categoryId = categoryId;
+  }
+  toast(kind==='category' ? 'הקטגוריה נוספה ונבחרה' : 'סוג העבודה נוסף ונבחר');
+  closeModal();
+}
+
+/* ============================== HISTORY ============================== */
+function getFilteredSortedReports(){
+  const f = state.historyFilters;
+  let list = DB.reports.filter(r=>{
+    if(f.dateFrom && r.date < f.dateFrom) return false;
+    if(f.dateTo && r.date > f.dateTo) return false;
+    if(f.workerIds.length && !f.workerIds.some(id=>r.workerIds.includes(id))) return false;
+    if(f.categoryId && r.categoryId!==f.categoryId) return false;
+    if(f.workTypeId && r.workTypeId!==f.workTypeId) return false;
+    if(f.locationId && r.locationId!==f.locationId) return false;
+    if(f.hoursMin!=="" && r.hours < parseFloat(f.hoursMin)) return false;
+    if(f.hoursMax!=="" && r.hours > parseFloat(f.hoursMax)) return false;
+    if(f.qtyMin!=="" && (r.quantity===null || r.quantity < parseFloat(f.qtyMin))) return false;
+    if(f.qtyMax!=="" && (r.quantity===null || r.quantity > parseFloat(f.qtyMax))) return false;
+    if(f.text){
+      const t = f.text.toLowerCase();
+      const hay = [r.description, r.notes, locationName(r.locationId, r.locationText), workTypeName(r.workTypeId), categoryName(r.categoryId), r.workerIds.map(workerName).join(' ')].join(' ').toLowerCase();
+      if(!hay.includes(t)) return false;
+    }
+    return true;
+  });
+  const {field, dir} = state.historySort;
+  list.sort((a,b)=>{
+    let av, bv;
+    switch(field){
+      case 'date': av=a.date; bv=b.date; break;
+      case 'worker': av=workerName(a.workerIds[0]||''); bv=workerName(b.workerIds[0]||''); break;
+      case 'workType': av=workTypeName(a.workTypeId); bv=workTypeName(b.workTypeId); break;
+      case 'category': av=categoryName(a.categoryId); bv=categoryName(b.categoryId); break;
+      case 'hours': av=a.hours; bv=b.hours; break;
+      case 'manHours': av=a.hours*a.workerIds.length; bv=b.hours*b.workerIds.length; break;
+      case 'quantity': av=a.quantity||0; bv=b.quantity||0; break;
+      case 'location': av=locationName(a.locationId,a.locationText); bv=locationName(b.locationId,b.locationText); break;
+      default: av=a.date; bv=b.date;
+    }
+    if(av<bv) return dir==='asc'?-1:1;
+    if(av>bv) return dir==='asc'?1:-1;
+    return 0;
+  });
+  return list;
+}
+
+function viewHistory(){
+  const list = getFilteredSortedReports();
+  const f = state.historyFilters;
+  const activeFilterCount = ['dateFrom','dateTo','categoryId','workTypeId','locationId','hoursMin','hoursMax','qtyMin','qtyMax']
+    .filter(k=>f[k]!=="").length + (f.workerIds.length?1:0) + (f.text?1:0);
+
+  return `
+    ${appbar('היסטוריית דיווחים')}
+    <div class="field">
+      <input type="search" id="historySearch" placeholder="חיפוש חופשי…" value="${esc(f.text)}">
+    </div>
+    <div class="filterbar">
+      <div class="fchip ${activeFilterCount?'active':''}" data-action="toggleFilterPanel">🔎 סינון ${activeFilterCount?`(${activeFilterCount})`:''}</div>
+      <div class="fchip" data-action="openSortPicker">⇅ מיון: ${sortLabel()}</div>
+      ${activeFilterCount ? `<div class="fchip" data-action="clearFilters">✕ נקה סינון</div>`:''}
+    </div>
+    <div class="filterpanel ${state._filterPanelOpen?'open':''}" id="filterPanel">
+      <div class="card">
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="fDateFrom" value="${f.dateFrom}"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="fDateTo" value="${f.dateTo}"></div>
+        </div>
+        <div class="field">
+          <label>עובדים (${f.workerIds.length} נבחרו)</label>
+          <button type="button" class="selectbtn" data-action="openHistoryWorkerPicker">בחר עובדים…</button>
+        </div>
+        <div class="row2">
+          <div class="field"><label>קטגוריה</label>
+            <select id="fCategory"><option value="">הכל</option>${DB.categories.map(c=>`<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>סוג עבודה</label>
+            <select id="fWorkType"><option value="">הכל</option>${DB.workTypes.map(w=>`<option value="${w.id}" ${f.workTypeId===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="field"><label>מיקום</label>
+          <select id="fLocation"><option value="">הכל</option>${DB.locations.map(l=>`<option value="${l.id}" ${f.locationId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
+        </div>
+        <div class="row2">
+          <div class="field"><label>שעות מ-</label><input type="number" id="fHoursMin" value="${f.hoursMin}"></div>
+          <div class="field"><label>שעות עד</label><input type="number" id="fHoursMax" value="${f.hoursMax}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>כמות מ-</label><input type="number" id="fQtyMin" value="${f.qtyMin}"></div>
+          <div class="field"><label>כמות עד</label><input type="number" id="fQtyMax" value="${f.qtyMax}"></div>
+        </div>
+        <button type="button" class="btn btn-primary" data-action="applyFilters">החל סינון</button>
+      </div>
+    </div>
+
+    <div class="small-note" style="margin:8px 2px 12px;">${list.length} דיווחים נמצאו</div>
+
+    ${list.length===0 ? `<div class="empty"><div class="ic">📋</div>לא נמצאו דיווחים</div>` :
+      list.map(r=>reportCard(r)).join('')}
+  `;
+}
+function sortLabel(){
+  const labels = {date:'תאריך',worker:'עובד',workType:'סוג עבודה',category:'קטגוריה',hours:'שעות',manHours:'שעות אדם',quantity:'כמות',location:'מיקום'};
+  return labels[state.historySort.field] + (state.historySort.dir==='asc'?' ↑':' ↓');
+}
+function reportCard(r){
+  const manHours = r.hours * r.workerIds.length;
+  return `<div class="rcard">
+    <div class="rcard-top">
+      <div class="rcard-date">${fmtDateHe(r.date)}</div>
+      <span class="badge">${esc(categoryName(r.categoryId))}</span>
+    </div>
+    <div class="rcard-tags">
+      <span class="tag">🏷 ${esc(workTypeName(r.workTypeId))}</span>
+      ${locationName(r.locationId,r.locationText)!=='—' ? `<span class="tag">📍 ${esc(locationName(r.locationId,r.locationText))}</span>`:''}
+      ${r.quantity ? `<span class="tag">${fmtNum(r.quantity)} ${esc(unitName(r.unitId))}</span>`:''}
+    </div>
+    ${r.description ? `<div class="rcard-desc">${esc(r.description)}</div>`:''}
+    <div class="rcard-workers">👥 ${r.workerIds.map(workerName).map(esc).join(', ')}</div>
+    <div class="rcard-stats">
+      <div>שעות: <b>${fmtNum(r.hours)}</b></div>
+      <div>שעות אדם: <b>${fmtNum(manHours)}</b></div>
+    </div>
+    ${r.notes ? `<div class="small-note" style="margin-top:6px;">📝 ${esc(r.notes)}</div>`:''}
+    ${r.photo ? `<img class="thumb" src="${r.photo}">`:''}
+    <div class="rcard-actions">
+      <button class="iconlink" data-action="editReport" data-id="${r.id}">✎ עריכה</button>
+      <button class="iconlink" data-action="duplicateReport" data-id="${r.id}">⧉ שכפול</button>
+      <button class="iconlink danger" data-action="deleteReport" data-id="${r.id}">🗑 מחיקה</button>
+    </div>
+  </div>`;
+}
+
+function openHistoryWorkerPicker(){ pushModalHistory(); renderHistoryWorkerPickerModal(""); }
+function renderHistoryWorkerPickerModal(search){
+  const f = state.historyFilters;
+  const workers = DB.workers.filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
+  const html = `<div class="overlay" id="workerModalOverlay">
+    <div class="sheet">
+      <div class="sheet-head"><h3>סינון לפי עובדים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <input type="search" class="search-in-modal" id="workerSearchInput" placeholder="חיפוש עובד…" value="${esc(search)}">
+      ${workers.map(w=>{
+        const checked = f.workerIds.includes(w.id);
+        return `<div class="msel-row ${checked?'checked':''}" data-action="toggleHistoryWorker" data-id="${w.id}">
+          <div class="msel-check">${checked?'✓':''}</div><div class="lbl">${esc(w.name)}</div>
+        </div>`;
+      }).join('')}
+      <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${f.workerIds.length} נבחרו)</button>
+    </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('workerSearchInput').addEventListener('input', e=>renderHistoryWorkerPickerModal(e.target.value));
+}
+function openSortPicker(){
+  pushModalHistory();
+  const fields = [['date','תאריך'],['worker','עובד'],['workType','סוג עבודה'],['category','קטגוריה'],['hours','שעות'],['manHours','שעות אדם'],['quantity','כמות'],['location','מיקום']];
+  const html = `<div class="overlay" id="sortOverlay">
+    <div class="sheet">
+      <div class="sheet-head"><h3>מיון לפי</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      ${fields.map(([k,l])=>`<div class="msel-row" data-action="setSortField" data-field="${k}"><div class="lbl">${l}</div>${state.historySort.field===k?'<div class="msel-check checked">✓</div>':''}</div>`).join('')}
+      <div class="divider"></div>
+      <div class="btnrow">
+        <button class="btn btn-outline" data-action="setSortDir" data-dir="asc">עולה ↑</button>
+        <button class="btn btn-outline" data-action="setSortDir" data-dir="desc">יורד ↓</button>
+      </div>
+    </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+/* ============================== REPORTS / AGGREGATIONS ============================== */
+function getReportPeriodRange(){
+  const p = state.reportsPeriod;
+  if(p.type==='day') return [p.date,p.date];
+  if(p.type==='week') return weekRange(p.date);
+  if(p.type==='month') return monthRange(p.date);
+  if(p.type==='custom') return [p.from||'0000-01-01', p.to||'9999-12-31'];
+  return monthRange(p.date);
+}
+
+function viewReports(){
+  const p = state.reportsPeriod;
+  const [start,end] = getReportPeriodRange();
+  const list = DB.reports.filter(r=>inRange(r.date,start,end));
+
+  return `
+    ${appbar('דוחות', {rightIcon:'⭳', rightAction:'openExport'})}
+    <div class="filterbar">
+      ${['day','week','month','custom'].map(t=>`<div class="fchip ${p.type===t?'active':''}" data-action="setPeriodType" data-type="${t}">${{day:'יום',week:'שבוע',month:'חודש',custom:'טווח מותאם'}[t]}</div>`).join('')}
+    </div>
+    <div class="card">
+      ${p.type==='custom' ? `
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="periodFrom" value="${p.from}"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="periodTo" value="${p.to}"></div>
+        </div>
+        <button class="btn btn-outline" data-action="applyPeriodCustom">החל</button>
+      ` : `
+        <div class="field"><label>בחר תאריך בתקופה</label><input type="date" id="periodDate" value="${p.date}"></div>
+        <div class="small-note">טווח: ${fmtDateHe(start)} – ${fmtDateHe(end)}</div>
+      `}
+    </div>
+
+    ${reportsSummaryHero(list)}
+
+    <div class="tabs">
+      ${[['worker','לפי עובד'],['workType','לפי סוג עבודה'],['category','לפי קטגוריה'],['location','לפי מיקום']].map(([k,l])=>
+        `<div class="tabbtn ${state.reportsTab===k?'active':''}" data-action="setReportsTab" data-tab="${k}">${l}</div>`).join('')}
+    </div>
+    ${renderReportsTab(list)}
+  `;
+}
+
+function reportsSummaryHero(list){
+  const totalHours = list.reduce((s,r)=>s+r.hours,0);
+  const totalManHours = list.reduce((s,r)=>s+r.hours*r.workerIds.length,0);
+  const workersSet = new Set(); list.forEach(r=>r.workerIds.forEach(w=>workersSet.add(w)));
+  const wtCount = {};
+  list.forEach(r=>{ wtCount[r.workTypeId]=(wtCount[r.workTypeId]||0)+r.hours*r.workerIds.length; });
+  const topWt = Object.entries(wtCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id])=>workTypeName(id));
+  const qtyByUnit = {};
+  list.forEach(r=>{ if(r.quantity){ const u=unitName(r.unitId)||'—'; qtyByUnit[u]=(qtyByUnit[u]||0)+r.quantity; } });
+
+  return `
+  <div class="section-title">סיכום כללי</div>
+  <div class="summary-hero">
+    <div class="hero-item"><div class="hero-num">${fmtNum(totalHours)}</div><div class="hero-lb">סה"כ שעות</div></div>
+    <div class="hero-item"><div class="hero-num">${fmtNum(totalManHours)}</div><div class="hero-lb">סה"כ שעות אדם</div></div>
+    <div class="hero-item"><div class="hero-num">${workersSet.size}</div><div class="hero-lb">עובדים פעילים</div></div>
+    <div class="hero-item"><div class="hero-num">${list.length}</div><div class="hero-lb">דיווחים</div></div>
+  </div>
+  ${topWt.length ? `<div class="small-note" style="margin-bottom:10px;">🏆 סוגי עבודה עיקריים: ${topWt.map(esc).join(', ')}</div>`:''}
+  ${Object.keys(qtyByUnit).length ? `<div class="small-note" style="margin-bottom:14px;">📦 כמויות: ${Object.entries(qtyByUnit).map(([u,q])=>`${fmtNum(q)} ${esc(u)}`).join(' · ')}</div>`:''}
+  `;
+}
+
+function renderReportsTab(list){
+  if(state.reportsTab==='worker') return reportsByWorker(list);
+  if(state.reportsTab==='workType') return reportsByWorkType(list);
+  if(state.reportsTab==='category') return reportsByCategory(list);
+  if(state.reportsTab==='location') return reportsByLocation(list);
+  return '';
+}
+
+function reportsByWorker(list){
+  const map = {};
+  list.forEach(r=>{
+    r.workerIds.forEach(wid=>{
+      if(!map[wid]) map[wid] = {hours:0, count:0, byWt:{}, byCat:{}};
+      map[wid].hours += r.hours;
+      map[wid].count += 1;
+      map[wid].byWt[r.workTypeId] = (map[wid].byWt[r.workTypeId]||0) + r.hours;
+      map[wid].byCat[r.categoryId] = (map[wid].byCat[r.categoryId]||0) + r.hours;
+    });
+  });
+  const rows = Object.entries(map).sort((a,b)=>b[1].hours-a[1].hours);
+  if(!rows.length) return emptyReportState();
+  return `<table class="rtable"><thead><tr><th>עובד</th><th>שעות</th><th>דיווחים</th><th>פילוח עיקרי</th></tr></thead><tbody>
+    ${rows.map(([wid,d])=>{
+      const topCat = Object.entries(d.byCat).sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td>${esc(workerName(wid))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${d.count}</td><td>${topCat?esc(categoryName(topCat[0])):''}</td></tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+function reportsByWorkType(list){
+  const map = {};
+  list.forEach(r=>{
+    if(!map[r.workTypeId]) map[r.workTypeId] = {hours:0, manHours:0, workers:new Set(), qty:0, unit:null};
+    const m = map[r.workTypeId];
+    m.hours += r.hours;
+    m.manHours += r.hours*r.workerIds.length;
+    r.workerIds.forEach(w=>m.workers.add(w));
+    if(r.quantity){ m.qty += r.quantity; m.unit = unitName(r.unitId); }
+  });
+  const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
+  if(!rows.length) return emptyReportState();
+  return `<table class="rtable"><thead><tr><th>סוג עבודה</th><th>שעות</th><th>שע"א</th><th>עובדים</th><th>תפוקה</th></tr></thead><tbody>
+    ${rows.map(([id,d])=>{
+      const prod = d.manHours>0 && d.qty>0 ? `${fmtNum(d.qty/d.manHours)} ${esc(d.unit||'')}/שע"א` : '—';
+      return `<tr><td>${esc(workTypeName(id))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td class="num">${d.workers.size}</td><td>${prod}</td></tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+function reportsByCategory(list){
+  const map = {};
+  list.forEach(r=>{
+    if(!map[r.categoryId]) map[r.categoryId] = {hours:0, manHours:0, count:0};
+    map[r.categoryId].hours += r.hours;
+    map[r.categoryId].manHours += r.hours*r.workerIds.length;
+    map[r.categoryId].count += 1;
+  });
+  const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
+  if(!rows.length) return emptyReportState();
+  return `<table class="rtable"><thead><tr><th>קטגוריה</th><th>שעות</th><th>שע"א</th><th>דיווחים</th></tr></thead><tbody>
+    ${rows.map(([id,d])=>`<tr><td>${esc(categoryName(id))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td class="num">${d.count}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+function reportsByLocation(list){
+  const map = {};
+  list.forEach(r=>{
+    const key = r.locationText ? ('t:'+r.locationText) : (r.locationId || 'none');
+    const label = locationName(r.locationId, r.locationText);
+    if(!map[key]) map[key] = {label, hours:0, manHours:0, byWt:{}};
+    map[key].hours += r.hours;
+    map[key].manHours += r.hours*r.workerIds.length;
+    map[key].byWt[r.workTypeId] = (map[key].byWt[r.workTypeId]||0)+r.hours;
+  });
+  const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
+  if(!rows.length) return emptyReportState();
+  return `<table class="rtable"><thead><tr><th>מיקום</th><th>שעות</th><th>שע"א</th><th>סוגי עבודה</th></tr></thead><tbody>
+    ${rows.map(([k,d])=>{
+      const wts = Object.keys(d.byWt).map(workTypeName).slice(0,2).join(', ');
+      return `<tr><td>${esc(d.label)}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td>${esc(wts)}</td></tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+function emptyReportState(){ return `<div class="empty"><div class="ic">▤</div>אין נתונים בתקופה זו</div>`; }
+
+/* ============================== GENERIC ENTITY MANAGER ============================== */
+const entityConfig = {
+  workers: { title:'עובדים', singular:'עובד', fields:[
+      {key:'name', label:'שם העובד', type:'text', required:true},
+      {key:'notes', label:'הערות', type:'textarea', required:false}
+    ], hasOrder:false },
+  categories: { title:'קטגוריות', singular:'קטגוריה', fields:[
+      {key:'name', label:'שם הקטגוריה', type:'text', required:true}
+    ], hasOrder:true },
+  workTypes: { title:'סוגי עבודה', singular:'סוג עבודה', fields:[
+      {key:'name', label:'שם סוג העבודה', type:'text', required:true},
+      {key:'categoryId', label:'קטגוריה', type:'select', required:false, source:'categories'}
+    ], hasOrder:true },
+  locations: { title:'מיקומים / אזורים', singular:'מיקום', fields:[
+      {key:'name', label:'שם המיקום', type:'text', required:true}
+    ], hasOrder:true },
+  units: { title:'יחידות מידה', singular:'יחידת מידה', fields:[
+      {key:'name', label:'שם היחידה', type:'text', required:true}
+    ], hasOrder:true },
+};
+const em = { search:'', showInactive:false, sortField:'name', sortDir:'asc' };
+
+function viewEntityManager(type){
+  const cfg = entityConfig[type];
+  let list = DB[type].filter(x=> em.showInactive ? true : x.active);
+  if(em.search) list = list.filter(x=>x.name.toLowerCase().includes(em.search.toLowerCase()));
+  if(cfg.hasOrder && em.sortField==='order'){
+    list.sort((a,b)=>(a.order??0)-(b.order??0));
+  } else {
+    list.sort((a,b)=>{
+      let av=a[em.sortField], bv=b[em.sortField];
+      if(em.sortField==='name'){ av=a.name; bv=b.name; }
+      if(av<bv) return em.sortDir==='asc'?-1:1;
+      if(av>bv) return em.sortDir==='asc'?1:-1;
+      return 0;
+    });
+  }
+  return `
+    ${appbar(cfg.title)}
+    <div class="field"><input type="search" id="emSearch" placeholder="חיפוש ${cfg.singular}…" value="${esc(em.search)}"></div>
+    <div class="filterbar">
+      <div class="fchip ${em.showInactive?'active':''}" data-action="toggleShowInactive" data-type="${type}">הצג לא פעילים</div>
+      <div class="fchip" data-action="toggleEmSort" data-field="name">מיון: שם ${em.sortField==='name'?(em.sortDir==='asc'?'↑':'↓'):''}</div>
+      ${cfg.hasOrder ? `<div class="fchip" data-action="toggleEmSort" data-field="order">מיון: סדר תצוגה</div>`:''}
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:14px;" data-action="openEntityForm" data-type="${type}">✚ הוסף ${cfg.singular}</button>
+    ${list.length===0 ? `<div class="empty"><div class="ic">📂</div>אין ${cfg.title} עדיין</div>` :
+      list.map(item=>entityRow(type,item,cfg)).join('')}
+  `;
+}
+function entityRow(type,item,cfg){
+  const used = isEntityUsed(type,item.id);
+  let sub = '';
+  if(type==='workTypes' && item.categoryId) sub = categoryName(item.categoryId);
+  if(item.notes) sub = (sub?sub+' · ':'')+item.notes;
+  return `<div class="list-row" data-action="openEntityForm" data-type="${type}" data-id="${item.id}">
+    ${cfg.hasOrder ? `<div class="reorder-btns" data-static="1">
+        <button data-action="reorderEntity" data-type="${type}" data-id="${item.id}" data-dir="up">▲</button>
+        <button data-action="reorderEntity" data-type="${type}" data-id="${item.id}" data-dir="down">▼</button>
+      </div>` : ''}
+    <div class="main">
+      <div class="title">${esc(item.name)}</div>
+      ${sub ? `<div class="meta">${esc(sub)}</div>`:''}
+    </div>
+    <span class="badge ${item.active?'on':'off'}">${item.active?'פעיל':'לא פעיל'}</span>
+    <span class="arrow">‹</span>
+  </div>`;
+}
+
+function openEntityForm(type,id){
+  pushModalHistory();
+  const cfg = entityConfig[type];
+  const item = id ? byId(DB[type],id) : {name:'', active:true, notes:'', categoryId:''};
+  const used = id ? isEntityUsed(type,id) : false;
+  const catOptions = type==='workTypes' ? activeOf(DB.categories) : [];
+  const html = `<div class="overlay" id="entityModalOverlay">
+    <div class="sheet">
+      <div class="sheet-head"><h3>${id?'עריכת':'הוספת'} ${cfg.singular}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <form id="entityForm">
+        ${cfg.fields.map(f=>{
+          if(f.type==='text') return `<div class="field"><label>${f.label}${f.required?' *':''}</label><input type="text" name="${f.key}" value="${esc(item[f.key]||'')}" ${f.required?'required':''}></div>`;
+          if(f.type==='textarea') return `<div class="field"><label>${f.label}</label><textarea name="${f.key}">${esc(item[f.key]||'')}</textarea></div>`;
+          if(f.type==='select') return `<div class="field"><label>${f.label}</label><select name="${f.key}"><option value="">— ללא —</option>${catOptions.map(c=>`<option value="${c.id}" ${item[f.key]===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>`;
+          return '';
+        }).join('')}
+        ${id ? `<div class="field"><label>סטטוס</label>
+          <div class="btnrow">
+            <button type="button" class="btn ${item.active?'btn-outline':'btn-primary'}" data-action="setEntityActive" data-val="0">לא פעיל / ארכיון</button>
+            <button type="button" class="btn ${item.active?'btn-primary':'btn-outline'}" data-action="setEntityActive" data-val="1">פעיל</button>
+          </div>
+        </div>` : ''}
+        <button type="submit" class="btn btn-primary" style="margin-top:6px;">${id?'שמור שינויים':'הוסף'}</button>
+      </form>
+      ${id ? `<div class="divider"></div>
+        ${used ? `<div class="small-note">⚠ פריט זה בשימוש בדיווחים קיימים ולכן לא ניתן למחוק לצמיתות — ניתן רק להעביר לארכיון.</div>`
+          : `<button class="btn btn-danger" data-action="hardDeleteEntity" data-type="${type}" data-id="${id}">מחק לצמיתות</button>`}
+      ` : ''}
+    </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('modalRoot')._activeVal = item.active?1:0;
+  document.getElementById('modalRoot')._entityType = type;
+  document.getElementById('modalRoot')._entityId = id;
+}
+
+/* combined categories + work types screen */
+function viewCategoriesWorkTypes(){
+  return `
+    ${appbar('קטגוריות וסוגי עבודה')}
+    <div class="tabs">
+      <div class="tabbtn ${state._cwtTab!=='wt'?'active':''}" data-action="setCwtTab" data-tab="cat">קטגוריות</div>
+      <div class="tabbtn ${state._cwtTab==='wt'?'active':''}" data-action="setCwtTab" data-tab="wt">סוגי עבודה</div>
+    </div>
+    ${state._cwtTab==='wt' ? viewEntityManagerInline('workTypes') : viewEntityManagerInline('categories')}
+  `;
+}
+function viewLocationsUnits(){
+  return `
+    ${appbar('מיקומים ויחידות מידה')}
+    <div class="tabs">
+      <div class="tabbtn ${state._luTab!=='u'?'active':''}" data-action="setLuTab" data-tab="loc">מיקומים</div>
+      <div class="tabbtn ${state._luTab==='u'?'active':''}" data-action="setLuTab" data-tab="u">יחידות מידה</div>
+    </div>
+    ${state._luTab==='u' ? viewEntityManagerInline('units') : viewEntityManagerInline('locations')}
+  `;
+}
+// inline variant without its own appbar (used inside combined screens)
+function viewEntityManagerInline(type){
+  const cfg = entityConfig[type];
+  let list = DB[type].filter(x=> em.showInactive ? true : x.active);
+  if(em.search) list = list.filter(x=>x.name.toLowerCase().includes(em.search.toLowerCase()));
+  list.sort((a,b)=>(a.order??0)-(b.order??0));
+  return `
+    <div class="field"><input type="search" id="emSearch" placeholder="חיפוש ${cfg.singular}…" value="${esc(em.search)}"></div>
+    <div class="filterbar">
+      <div class="fchip ${em.showInactive?'active':''}" data-action="toggleShowInactive" data-type="${type}">הצג לא פעילים</div>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:14px;" data-action="openEntityForm" data-type="${type}">✚ הוסף ${cfg.singular}</button>
+    ${list.length===0 ? `<div class="empty"><div class="ic">📂</div>אין פריטים עדיין</div>` :
+      list.map(item=>entityRow(type,item,cfg)).join('')}
+  `;
+}
+
+/* ============================== SETTINGS ============================== */
+function viewSettings(){
+  return `
+    ${appbar('הגדרות')}
+    <div class="section-title">גיבוי ושחזור</div>
+    <div class="card">
+      <div class="small-note" style="margin-bottom:12px;">ייצוא של כל נתוני המערכת (עובדים, קטגוריות, סוגי עבודה, מיקומים, יחידות ודיווחים) לקובץ גיבוי.</div>
+      <div class="btnrow">
+        <button class="btn btn-outline" data-action="exportBackup">⭳ ייצוא גיבוי</button>
+        <button class="btn btn-outline" data-action="triggerImport">⭱ ייבוא / שחזור</button>
+      </div>
+      <input type="file" id="importFileInput" accept="application/json" style="display:none;">
+    </div>
+    <div class="section-title">איפוס</div>
+    <div class="card">
+      <div class="small-note" style="margin-bottom:12px;">מחיקת כל הנתונים במערכת ואיפוס לברירת מחדל. פעולה זו בלתי הפיכה.</div>
+      <button class="btn btn-danger" data-action="hardReset">🗑 איפוס מלא של המערכת</button>
+    </div>
+    <div class="section-title">אודות</div>
+    <div class="card small-note">
+      יומן עבודה — מערכת ניהול ומעקב עבודות אתר. גרסת MVP.<br>
+      נתונים נשמרים באופן פרטי בחשבונך בלבד.
+    </div>
+  `;
+}
+
+/* ============================== EXPORT TO EXCEL ============================== */
+function openExportModal(){
+  pushModalHistory();
+  const html = `<div class="overlay" id="exportOverlay">
+    <div class="sheet">
+      <div class="sheet-head"><h3>ייצוא ל-Excel</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <div class="field"><label>טווח לייצוא</label>
+        <select id="exportRange">
+          <option value="day">היום</option>
+          <option value="week">השבוע</option>
+          <option value="month" selected>החודש</option>
+          <option value="custom">טווח מותאם</option>
+          <option value="all">כל הנתונים</option>
+        </select>
+      </div>
+      <div id="exportCustomRange" style="display:none;">
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="exportFrom"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="exportTo"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" data-action="doExport">⭳ ייצוא</button>
+    </div></div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('exportRange').addEventListener('change', e=>{
+    document.getElementById('exportCustomRange').style.display = e.target.value==='custom' ? 'block':'none';
+  });
+}
+
+function doExport(){
+  const rangeSel = document.getElementById('exportRange').value;
+  let start='0000-01-01', end='9999-12-31';
+  const today = todayStr();
+  if(rangeSel==='day'){ start=end=today; }
+  else if(rangeSel==='week'){ [start,end]=weekRange(today); }
+  else if(rangeSel==='month'){ [start,end]=monthRange(today); }
+  else if(rangeSel==='custom'){
+    start = document.getElementById('exportFrom').value || start;
+    end = document.getElementById('exportTo').value || end;
+  }
+  const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Raw Data
+  const rawRows = list.map(r=>({
+    "תאריך": fmtDateHe(r.date),
+    "עובדים": r.workerIds.map(workerName).join(', '),
+    "מס' עובדים": r.workerIds.length,
+    "קטגוריה": categoryName(r.categoryId),
+    "סוג עבודה": workTypeName(r.workTypeId),
+    "תיאור": r.description||'',
+    "מיקום": locationName(r.locationId, r.locationText),
+    "שעות": r.hours,
+    "שעות אדם": +(r.hours*r.workerIds.length).toFixed(2),
+    "כמות": r.quantity||'',
+    "יחידה": unitName(r.unitId),
+    "הערות": r.notes||''
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(rawRows);
+  XLSX.utils.book_append_sheet(wb, ws1, "Raw Data");
+
+  // Sheet 2: Workers Summary
+  const wmap = {};
+  list.forEach(r=> r.workerIds.forEach(wid=>{
+    if(!wmap[wid]) wmap[wid] = {hours:0,count:0};
+    wmap[wid].hours += r.hours; wmap[wid].count += 1;
+  }));
+  const wsRows2 = Object.entries(wmap).map(([wid,d])=>({
+    "עובד": workerName(wid), "סה\"כ שעות": +d.hours.toFixed(2), "מספר דיווחים": d.count
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows2), "Workers Summary");
+
+  // Sheet 3: Work Types Summary
+  const wtmap = {};
+  list.forEach(r=>{
+    if(!wtmap[r.workTypeId]) wtmap[r.workTypeId] = {hours:0,manHours:0,workers:new Set(),qty:0,unit:''};
+    const m = wtmap[r.workTypeId];
+    m.hours += r.hours; m.manHours += r.hours*r.workerIds.length;
+    r.workerIds.forEach(w=>m.workers.add(w));
+    if(r.quantity){ m.qty += r.quantity; m.unit = unitName(r.unitId); }
+  });
+  const wsRows3 = Object.entries(wtmap).map(([id,d])=>({
+    "סוג עבודה": workTypeName(id), "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2),
+    "מס' עובדים": d.workers.size, "כמות": d.qty||'', "יחידה": d.unit,
+    "תפוקה (כמות/שעת אדם)": (d.manHours>0 && d.qty>0) ? +(d.qty/d.manHours).toFixed(3) : ''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows3), "Work Types Summary");
+
+  // Sheet 4: Categories Summary
+  const cmap = {};
+  list.forEach(r=>{
+    if(!cmap[r.categoryId]) cmap[r.categoryId] = {hours:0,manHours:0,count:0};
+    cmap[r.categoryId].hours += r.hours; cmap[r.categoryId].manHours += r.hours*r.workerIds.length; cmap[r.categoryId].count += 1;
+  });
+  const wsRows4 = Object.entries(cmap).map(([id,d])=>({
+    "קטגוריה": categoryName(id), "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "מספר דיווחים": d.count
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows4), "Categories Summary");
+
+  // Sheet 5: Locations Summary
+  const lmap = {};
+  list.forEach(r=>{
+    const key = r.locationText ? ('t:'+r.locationText) : (r.locationId||'none');
+    const label = locationName(r.locationId, r.locationText);
+    if(!lmap[key]) lmap[key] = {label, hours:0, manHours:0};
+    lmap[key].hours += r.hours; lmap[key].manHours += r.hours*r.workerIds.length;
+  });
+  const wsRows5 = Object.entries(lmap).map(([k,d])=>({
+    "מיקום": d.label, "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2)
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows5), "Locations Summary");
+
+  const fname = `דוח-עבודה_${start}_${end}.xlsx`;
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([wbout], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  closeModal();
+  toast('הקובץ יוצא בהצלחה');
+}
+
+/* ============================== BACKUP / RESTORE / RESET ============================== */
+function exportBackup(){
+  const backup = {version:1, exportedAt:new Date().toISOString(), data:DB};
+  const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `גיבוי-יומן-עבודה_${todayStr()}.json`; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  toast('גיבוי הורד בהצלחה');
+}
+async function importBackupFile(file){
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const data = parsed.data || parsed;
+    if(!confirm('שחזור גיבוי יחליף את כל הנתונים הקיימים במערכת. להמשיך?')) return;
+    for(const c of COLLECTIONS){ if(Array.isArray(data[c])) DB[c] = data[c]; }
+    await saveAllCollections();
+    toast('השחזור הושלם בהצלחה');
+    go({name:'home'});
+  }catch(e){
+    console.error(e); toast('שגיאה בקריאת קובץ הגיבוי');
+  }
+}
+async function hardReset(){
+  if(!confirm('פעולה זו תמחק את כל הנתונים במערכת לצמיתות. להמשיך?')) return;
+  if(!confirm('אישור אחרון: למחוק את כל הנתונים?')) return;
+  for(const c of COLLECTIONS) DB[c] = [];
+  seedDefaults();
+  await saveAllCollections();
+  toast('המערכת אופסה');
+  go({name:'home'});
+}
+
+/* ============================== MODAL HELPERS ============================== */
+function closeModal(){
+  if(navStack.length && navStack[navStack.length-1].kind==='modal'){
+    history.back(); // triggers popstate handler above, which does the actual close
+  } else {
+    document.getElementById('modalRoot').innerHTML = '';
+    render();
+  }
+}
+
+/* ============================== EVENT HANDLING ============================== */
+document.addEventListener('submit', async (e)=>{
+  if(e.target.id==='reportForm'){
+    e.preventDefault();
+    await submitReportForm(e.target);
+  } else if(e.target.id==='entityForm'){
+    e.preventDefault();
+    await submitEntityForm(e.target);
+  } else if(e.target.id==='quickAddForm'){
+    e.preventDefault();
+    await submitQuickAddForm(e.target);
+  }
+});
+
+async function submitReportForm(form){
+  const draft = state.formDraft;
+  const fd = new FormData(form);
+  const date = fd.get('date');
+  const categoryId = fd.get('categoryId');
+  const workTypeId = fd.get('workTypeId');
+  const hours = parseFloat(fd.get('hours'));
+  if(!date || draft.workerIds.length===0 || !workTypeId || !hours || hours<=0){
+    toast('נא למלא את כל השדות החובה (תאריך, עובדים, סוג עבודה, שעות > 0)');
+    return;
+  }
+  const locSelect = form.querySelector('[name=locationId]').value;
+  let locationId = "", locationText = "";
+  if(locSelect==='__free__'){ locationText = form.querySelector('[name=locationText]').value.trim(); }
+  else { locationId = locSelect; }
+
+  const rep = {
+    id: draft._editId || uid(),
+    date, workerIds: draft.workerIds.slice(),
+    categoryId, workTypeId,
+    description: fd.get('description')||'',
+    locationId, locationText,
+    hours,
+    quantity: fd.get('quantity') ? parseFloat(fd.get('quantity')) : null,
+    unitId: fd.get('unitId')||'',
+    notes: fd.get('notes')||'',
+    photo: draft.photo || null,
+    createdAt: draft._editId ? (byId(DB.reports,draft._editId)||{}).createdAt || Date.now() : Date.now(),
+    updatedAt: Date.now()
+  };
+  if(draft._editId){
+    const idx = DB.reports.findIndex(r=>r.id===draft._editId);
+    DB.reports[idx] = rep;
+  } else {
+    DB.reports.push(rep);
+  }
+  await saveCollection('reports');
+  state.formDraft = null;
+  toast(draft._editId ? 'הדיווח עודכן' : 'הדיווח נשמר');
+  go({name:'history'});
+}
+
+async function submitEntityForm(form){
+  const modalRoot = document.getElementById('modalRoot');
+  const type = modalRoot._entityType;
+  const id = modalRoot._entityId;
+  const cfg = entityConfig[type];
+  const fd = new FormData(form);
+  const obj = id ? byId(DB[type], id) : {id: uid(), active:true, createdAt:Date.now(), order: DB[type].length};
+  cfg.fields.forEach(f=>{ obj[f.key] = fd.get(f.key) || ''; });
+  if(!obj.name || !obj.name.trim()){ toast('שם הוא שדה חובה'); return; }
+  if(id){
+    obj.active = modalRoot._activeVal ? true : false;
+  } else {
+    DB[type].push(obj);
+  }
+  await saveCollection(type);
+  closeModal();
+  toast(id ? 'העדכון נשמר' : 'הפריט נוסף בהצלחה');
+}
+
+document.addEventListener('click', async (e)=>{
+  const nav = e.target.closest('[data-nav]');
+  const action = e.target.closest('[data-action]');
+
+  if(nav){
+    const name = nav.getAttribute('data-nav');
+    if(name==='addReport'){ state.formDraft=null; go({name:'addReport'}); }
+    else go({name});
+    return;
+  }
+  if(!action) return;
+  const act = action.getAttribute('data-action');
+
+  switch(act){
+    case 'openExport': openExportModal(); break;
+    case 'doExport': doExport(); break;
+    case 'closeModal': closeModal(); break;
+
+    case 'goBack': goBack(); break;
+    case 'openQuickAdd': openQuickAdd(action.getAttribute('data-kind')); break;
+
+    case 'openWorkerPicker': openWorkerPicker(); break;
+    case 'toggleWorker': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      const i = draft.workerIds.indexOf(id);
+      if(i>=0) draft.workerIds.splice(i,1); else draft.workerIds.push(id);
+      const searchVal = document.getElementById('workerSearchInput') ? document.getElementById('workerSearchInput').value : '';
+      renderWorkerPickerModal(searchVal);
+      break;
+    }
+    case 'removeWorkerChip': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      draft.workerIds = draft.workerIds.filter(x=>x!==id);
+      render();
+      break;
+    }
+    case 'removePhoto': { state.formDraft.photo = null; render(); break; }
+
+    case 'editReport': { state.formDraft=null; go({name:'addReport', editId: action.getAttribute('data-id')}); break; }
+    case 'duplicateReport': { state.formDraft=null; go({name:'addReport', duplicateFrom: action.getAttribute('data-id')}); break; }
+    case 'deleteReport': {
+      const id = action.getAttribute('data-id');
+      if(confirm('למחוק את הדיווח? פעולה זו בלתי הפיכה.')){
+        DB.reports = DB.reports.filter(r=>r.id!==id);
+        await saveCollection('reports');
+        toast('הדיווח נמחק');
+        go({name:'history'});
+      }
+      break;
+    }
+
+    case 'toggleFilterPanel': state._filterPanelOpen = !state._filterPanelOpen; render(); break;
+    case 'clearFilters': {
+      state.historyFilters = { text:"", dateFrom:"", dateTo:"", workerIds:[], categoryId:"", workTypeId:"", locationId:"", hoursMin:"", hoursMax:"", qtyMin:"", qtyMax:"" };
+      render();
+      break;
+    }
+    case 'applyFilters': {
+      const f = state.historyFilters;
+      f.dateFrom = document.getElementById('fDateFrom').value;
+      f.dateTo = document.getElementById('fDateTo').value;
+      f.categoryId = document.getElementById('fCategory').value;
+      f.workTypeId = document.getElementById('fWorkType').value;
+      f.locationId = document.getElementById('fLocation').value;
+      f.hoursMin = document.getElementById('fHoursMin').value;
+      f.hoursMax = document.getElementById('fHoursMax').value;
+      f.qtyMin = document.getElementById('fQtyMin').value;
+      f.qtyMax = document.getElementById('fQtyMax').value;
+      state._filterPanelOpen = false;
+      render();
+      break;
+    }
+    case 'openHistoryWorkerPicker': openHistoryWorkerPicker(); break;
+    case 'toggleHistoryWorker': {
+      const id = action.getAttribute('data-id');
+      const f = state.historyFilters;
+      const i = f.workerIds.indexOf(id);
+      if(i>=0) f.workerIds.splice(i,1); else f.workerIds.push(id);
+      const searchVal = document.getElementById('workerSearchInput') ? document.getElementById('workerSearchInput').value : '';
+      renderHistoryWorkerPickerModal(searchVal);
+      break;
+    }
+    case 'openSortPicker': openSortPicker(); break;
+    case 'setSortField': state.historySort.field = action.getAttribute('data-field'); closeModal(); break;
+    case 'setSortDir': state.historySort.dir = action.getAttribute('data-dir'); closeModal(); break;
+
+    case 'setPeriodType': state.reportsPeriod.type = action.getAttribute('data-type'); render(); break;
+    case 'applyPeriodCustom': {
+      state.reportsPeriod.from = document.getElementById('periodFrom').value;
+      state.reportsPeriod.to = document.getElementById('periodTo').value;
+      render();
+      break;
+    }
+    case 'setReportsTab': state.reportsTab = action.getAttribute('data-tab'); render(); break;
+
+    case 'openEntityForm': openEntityForm(action.getAttribute('data-type'), action.getAttribute('data-id')||null); break;
+    case 'setEntityActive': {
+      document.getElementById('modalRoot')._activeVal = action.getAttribute('data-val')==='1';
+      // re-render buttons state
+      const btns = action.parentElement.querySelectorAll('button');
+      btns.forEach(b=>b.classList.remove('btn-primary'));
+      btns.forEach(b=>b.classList.add('btn-outline'));
+      action.classList.remove('btn-outline'); action.classList.add('btn-primary');
+      break;
+    }
+    case 'hardDeleteEntity': {
+      const type = action.getAttribute('data-type'); const id = action.getAttribute('data-id');
+      if(isEntityUsed(type,id)){ toast('לא ניתן למחוק פריט בשימוש'); return; }
+      if(confirm('למחוק פריט זה לצמיתות?')){
+        DB[type] = DB[type].filter(x=>x.id!==id);
+        await saveCollection(type);
+        closeModal(); toast('נמחק לצמיתות');
+      }
+      break;
+    }
+    case 'reorderEntity': {
+      const type = action.getAttribute('data-type'); const id = action.getAttribute('data-id'); const dir = action.getAttribute('data-dir');
+      const list = DB[type].slice().sort((a,b)=>(a.order??0)-(b.order??0));
+      const idx = list.findIndex(x=>x.id===id);
+      const swapIdx = dir==='up' ? idx-1 : idx+1;
+      if(swapIdx<0 || swapIdx>=list.length) break;
+      const tmp = list[idx].order; list[idx].order = list[swapIdx].order; list[swapIdx].order = tmp;
+      await saveCollection(type);
+      render();
+      break;
+    }
+    case 'toggleShowInactive': em.showInactive = !em.showInactive; render(); break;
+    case 'toggleEmSort': {
+      const f = action.getAttribute('data-field');
+      if(em.sortField===f) em.sortDir = em.sortDir==='asc'?'desc':'asc'; else { em.sortField=f; em.sortDir='asc'; }
+      render();
+      break;
+    }
+    case 'setCwtTab': state._cwtTab = action.getAttribute('data-tab'); render(); break;
+    case 'setLuTab': state._luTab = action.getAttribute('data-tab'); render(); break;
+
+    case 'exportBackup': exportBackup(); break;
+    case 'triggerImport': document.getElementById('importFileInput').click(); break;
+    case 'hardReset': hardReset(); break;
+  }
+});
+
+document.addEventListener('change', async (e)=>{
+  if(e.target.id==='historySearch'){ /* handled on input below */ }
+  if(e.target.name==='categoryId' && e.target.closest('#reportForm')){
+    state.formDraft.categoryId = e.target.value;
+    state.formDraft.workTypeId = "";
+    render();
+  }
+  if(e.target.name==='locationId' && e.target.closest('#reportForm')){
+    const wrap = e.target.closest('.field');
+    const txt = wrap.querySelector('[name=locationText]');
+    if(e.target.value==='__free__'){ txt.style.display='block'; txt.focus(); }
+    else { txt.style.display='none'; txt.value=''; }
+  }
+  if(e.target.id==='photoInput'){
+    const file = e.target.files[0];
+    if(file){
+      const dataUrl = await compressImage(file);
+      state.formDraft.photo = dataUrl;
+      render();
+    }
+  }
+  if(e.target.id==='importFileInput'){
+    const file = e.target.files[0];
+    if(file) importBackupFile(file);
+  }
+  if(e.target.id==='emSearch'){ em.search = e.target.value; render(); document.getElementById('emSearch').focus(); }
+});
+
+document.addEventListener('input', (e)=>{
+  if(e.target.id==='historySearch'){
+    state.historyFilters.text = e.target.value;
+    // debounce-lite: re-render list only, keep focus
+    clearTimeout(document._histSearchT);
+    document._histSearchT = setTimeout(()=>{
+      const cursorPos = e.target.selectionStart;
+      render();
+      const el = document.getElementById('historySearch');
+      if(el){ el.focus(); el.setSelectionRange(cursorPos, cursorPos); }
+    }, 250);
+  }
+  // capture form field values into draft live (so re-render doesn't lose data)
+  if(e.target.closest('#reportForm')){
+    const draft = state.formDraft;
+    const name = e.target.name;
+    if(name && name!=='locationText') draft[name] = e.target.value;
+    if(name==='locationText') draft.locationText = e.target.value;
+  }
+});
+
+/* preserve free text fields across incidental re-renders without full reset (description/notes) handled above via input listener */
+
+/* ============================== INIT ============================== */
+async function init(){
+  document.getElementById('app').innerHTML = `<div class="empty" style="padding-top:80px;"><div class="ic">⏳</div>טוען נתונים…</div>`;
+  await loadAll();
+  render();
+}
+init();
+
+// Register the (non-caching) service worker so the app is installable as a
+// real PWA on Android/iOS. Safe to skip silently if unsupported (e.g. when
+// opened directly from a local file instead of a real https/GitHub Pages URL).
+if('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  });
+}
+
+})();
+</script>
+</body>
+</html>

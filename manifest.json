@@ -1,0 +1,17 @@
+{
+  "name": "יומן עבודה — ניהול ומעקב",
+  "short_name": "יומן עבודה",
+  "description": "ניהול ומעקב אחר עבודות שבוצעו על ידי עובדים באתר",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f3ee",
+  "theme_color": "#d98a12",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
