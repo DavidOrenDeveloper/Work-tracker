@@ -144,6 +144,7 @@ input[type=text],input[type=date],input[type=number],select,textarea,input[type=
 input:focus,select:focus,textarea:focus{border-color:var(--amber);}
 input[type=number]{direction:ltr;text-align:right;}
 input[type=date]{direction:ltr;text-align:right;}
+input.hm-input{direction:ltr;text-align:right;}
 textarea{resize:vertical;min-height:64px;}
 select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -295,6 +296,45 @@ function fmtNum(n, decimals=2){
   if(n===null||n===undefined||isNaN(n)) return "0";
   const r = Math.round(n*100)/100;
   return (r % 1 === 0) ? String(r) : r.toFixed(decimals).replace(/0+$/,"").replace(/\.$/,"");
+}
+/* ---- Hours entry format: H.MM (hours.minutes), NOT decimal hours ----
+   1.30 = 1 hour 30 minutes = 1.5 decimal hours (for math)
+   1.33 = 1 hour 33 minutes = 1.55 decimal hours (for math)
+   A single fractional digit is treated as a tens-of-minutes shorthand
+   (1.3 == 1.30), matching how people naturally drop a trailing zero. */
+function parseHM(str){
+  if(str===''||str===null||str===undefined) return null;
+  str = String(str).trim();
+  if(str==='' || str==='-') return null;
+  const neg = str.startsWith('-');
+  if(neg) str = str.slice(1);
+  const parts = str.split('.');
+  let h = parseInt(parts[0]||'0', 10);
+  if(isNaN(h)) h = 0;
+  let m = 0;
+  if(parts.length>1 && parts[1]!==''){
+    let mStr = parts[1].replace(/[^0-9]/g,'');
+    if(mStr.length===1) mStr = mStr+'0'; // "1.3" -> 30 minutes
+    else mStr = mStr.slice(0,2);          // "1.33" -> 33 minutes; ignore extra digits
+    m = parseInt(mStr,10) || 0;
+    if(m>59) m = 59;
+  }
+  const decimal = h + m/60;
+  return neg ? -decimal : decimal;
+}
+function decimalToHM(decimalHours){
+  if(decimalHours===null||decimalHours===undefined||isNaN(decimalHours)) return '';
+  const neg = decimalHours<0;
+  const abs = Math.abs(decimalHours);
+  let h = Math.floor(abs);
+  let m = Math.round((abs-h)*60);
+  if(m===60){ m=0; h+=1; }
+  return (neg?'-':'') + h + '.' + String(m).padStart(2,'0');
+}
+/* Format a decimal-hours value for display, always as H.MM */
+function fmtHM(decimalHours){
+  if(decimalHours===null||decimalHours===undefined||isNaN(decimalHours)) return '0:00';
+  return decimalToHM(decimalHours).replace('.', ':'); // display as 1:30, not 1.30
 }
 function toast(msg){
   const t = document.getElementById('toast');
@@ -597,8 +637,8 @@ function viewHome(){
       <div class="dash-label">סיכום היום · ${fmtDateHe(today)}</div>
       <div class="dash-grid">
         <div class="dash-item"><div class="dash-num">${workersToday.size}</div><div class="dash-sub">עובדים</div></div>
-        <div class="dash-item"><div class="dash-num">${fmtNum(hoursToday)}</div><div class="dash-sub">שעות</div></div>
-        <div class="dash-item"><div class="dash-num">${fmtNum(manHoursToday)}</div><div class="dash-sub">שעות אדם</div></div>
+        <div class="dash-item"><div class="dash-num">${fmtHM(hoursToday)}</div><div class="dash-sub">שעות</div></div>
+        <div class="dash-item"><div class="dash-num">${fmtHM(manHoursToday)}</div><div class="dash-sub">שעות אדם</div></div>
         <div class="dash-item"><div class="dash-num">${todays.length}</div><div class="dash-sub">דיווחים</div></div>
       </div>
     </div>
@@ -628,11 +668,13 @@ function viewReportForm(editId, duplicateFrom){
   } else if(editId){
     const rep = byId(DB.reports, editId);
     draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
+    draft.hours = decimalToHM(draft.hours); // stored as decimal, edited as H.MM
     draft._formKey = editId;
     draft._editId = editId;
   } else if(duplicateFrom){
     const rep = byId(DB.reports, duplicateFrom);
     draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
+    draft.hours = decimalToHM(draft.hours);
     draft.id = null; draft.date = todayStr();
     draft._formKey = duplicateFrom;
   } else {
@@ -645,7 +687,8 @@ function viewReportForm(editId, duplicateFrom){
   const wts = activeOf(DB.workTypes).filter(w => !draft.categoryId || w.categoryId===draft.categoryId);
   const locs = activeOf(DB.locations);
   const units = activeOf(DB.units);
-  const manHours = draft.hours && draft.workerIds.length ? (parseFloat(draft.hours)*draft.workerIds.length) : 0;
+  const hoursDecimal = parseHM(draft.hours) || 0;
+  const manHours = hoursDecimal && draft.workerIds.length ? (hoursDecimal*draft.workerIds.length) : 0;
 
   return `
     ${appbar(editId ? 'עריכת דיווח' : 'דיווח עבודה חדש')}
@@ -701,7 +744,8 @@ function viewReportForm(editId, duplicateFrom){
         <div class="row2">
           <div class="field">
             <label>מספר שעות *</label>
-            <input type="number" name="hours" step="any" min="0" inputmode="decimal" placeholder="לדוגמה: 1.5" value="${esc(draft.hours)}" required>
+            <input type="text" inputmode="decimal" class="hm-input" name="hours" placeholder="לדוגמה: 1.30" value="${esc(draft.hours)}" required>
+            <div class="hint">פורמט שעות.דקות — 1.30 = שעה וחצי, 1.33 = שעה ו-33 דקות, 0.45 = 45 דקות</div>
           </div>
           <div class="field">
             <label>כמות שבוצעה</label>
@@ -717,7 +761,7 @@ function viewReportForm(editId, duplicateFrom){
           </select>
         </div>
 
-        ${draft.workerIds.length>1 ? `<div class="small-note" id="manHoursPreview">👥 ${draft.workerIds.length} עובדים × <span id="mhPreviewHours">${fmtNum(draft.hours||0)}</span> שעות = <b class="mono" id="mhPreviewTotal">${fmtNum(manHours)}</b> שעות אדם</div>` : ''}
+        ${draft.workerIds.length>1 ? `<div class="small-note" id="manHoursPreview">👥 ${draft.workerIds.length} עובדים × <span id="mhPreviewHours">${fmtHM(hoursDecimal)}</span> שעות = <b class="mono" id="mhPreviewTotal">${fmtHM(manHours)}</b> שעות אדם</div>` : ''}
 
         <div class="field" style="margin-top:14px;">
           <label>הערות</label>
@@ -947,8 +991,8 @@ function reportCard(r){
     ${r.description ? `<div class="rcard-desc">${esc(r.description)}</div>`:''}
     <div class="rcard-workers">👥 ${r.workerIds.map(workerName).map(esc).join(', ')}</div>
     <div class="rcard-stats">
-      <div>שעות: <b>${fmtNum(r.hours)}</b></div>
-      <div>שעות אדם: <b>${fmtNum(manHours)}</b></div>
+      <div>שעות: <b>${fmtHM(r.hours)}</b></div>
+      <div>שעות אדם: <b>${fmtHM(manHours)}</b></div>
     </div>
     ${r.notes ? `<div class="small-note" style="margin-top:6px;">📝 ${esc(r.notes)}</div>`:''}
     ${r.photo ? `<img class="thumb" src="${r.photo}">`:''}
@@ -1051,8 +1095,8 @@ function reportsSummaryHero(list){
   return `
   <div class="section-title">סיכום כללי</div>
   <div class="summary-hero">
-    <div class="hero-item"><div class="hero-num">${fmtNum(totalHours)}</div><div class="hero-lb">סה"כ שעות</div></div>
-    <div class="hero-item"><div class="hero-num">${fmtNum(totalManHours)}</div><div class="hero-lb">סה"כ שעות אדם</div></div>
+    <div class="hero-item"><div class="hero-num">${fmtHM(totalHours)}</div><div class="hero-lb">סה"כ שעות</div></div>
+    <div class="hero-item"><div class="hero-num">${fmtHM(totalManHours)}</div><div class="hero-lb">סה"כ שעות אדם</div></div>
     <div class="hero-item"><div class="hero-num">${workersSet.size}</div><div class="hero-lb">עובדים פעילים</div></div>
     <div class="hero-item"><div class="hero-num">${list.length}</div><div class="hero-lb">דיווחים</div></div>
   </div>
@@ -1085,7 +1129,7 @@ function reportsByWorker(list){
   return `<table class="rtable"><thead><tr><th>עובד</th><th>שעות</th><th>דיווחים</th><th>פילוח עיקרי</th></tr></thead><tbody>
     ${rows.map(([wid,d])=>{
       const topCat = Object.entries(d.byCat).sort((a,b)=>b[1]-a[1])[0];
-      return `<tr><td>${esc(workerName(wid))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${d.count}</td><td>${topCat?esc(categoryName(topCat[0])):''}</td></tr>`;
+      return `<tr><td>${esc(workerName(wid))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${d.count}</td><td>${topCat?esc(categoryName(topCat[0])):''}</td></tr>`;
     }).join('')}
   </tbody></table>`;
 }
@@ -1104,7 +1148,7 @@ function reportsByWorkType(list){
   return `<table class="rtable"><thead><tr><th>סוג עבודה</th><th>שעות</th><th>שע"א</th><th>עובדים</th><th>תפוקה</th></tr></thead><tbody>
     ${rows.map(([id,d])=>{
       const prod = d.manHours>0 && d.qty>0 ? `${fmtNum(d.qty/d.manHours)} ${esc(d.unit||'')}/שע"א` : '—';
-      return `<tr><td>${esc(workTypeName(id))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td class="num">${d.workers.size}</td><td>${prod}</td></tr>`;
+      return `<tr><td>${esc(workTypeName(id))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.workers.size}</td><td>${prod}</td></tr>`;
     }).join('')}
   </tbody></table>`;
 }
@@ -1119,7 +1163,7 @@ function reportsByCategory(list){
   const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
   if(!rows.length) return emptyReportState();
   return `<table class="rtable"><thead><tr><th>קטגוריה</th><th>שעות</th><th>שע"א</th><th>דיווחים</th></tr></thead><tbody>
-    ${rows.map(([id,d])=>`<tr><td>${esc(categoryName(id))}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td class="num">${d.count}</td></tr>`).join('')}
+    ${rows.map(([id,d])=>`<tr><td>${esc(categoryName(id))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.count}</td></tr>`).join('')}
   </tbody></table>`;
 }
 function reportsByLocation(list){
@@ -1137,7 +1181,7 @@ function reportsByLocation(list){
   return `<table class="rtable"><thead><tr><th>מיקום</th><th>שעות</th><th>שע"א</th><th>סוגי עבודה</th></tr></thead><tbody>
     ${rows.map(([k,d])=>{
       const wts = Object.keys(d.byWt).map(workTypeName).slice(0,2).join(', ');
-      return `<tr><td>${esc(d.label)}</td><td class="num">${fmtNum(d.hours)}</td><td class="num">${fmtNum(d.manHours)}</td><td>${esc(wts)}</td></tr>`;
+      return `<tr><td>${esc(d.label)}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td>${esc(wts)}</td></tr>`;
     }).join('')}
   </tbody></table>`;
 }
@@ -1365,7 +1409,9 @@ function doExport(){
     "תיאור": r.description||'',
     "מיקום": locationName(r.locationId, r.locationText),
     "שעות": r.hours,
+    "שעות (שעות:דקות)": fmtHM(r.hours),
     "שעות אדם": +(r.hours*r.workerIds.length).toFixed(2),
+    "שעות אדם (שעות:דקות)": fmtHM(r.hours*r.workerIds.length),
     "כמות": r.quantity||'',
     "יחידה": unitName(r.unitId),
     "הערות": r.notes||''
@@ -1499,7 +1545,7 @@ async function submitReportForm(form){
   const date = fd.get('date');
   const categoryId = fd.get('categoryId');
   const workTypeId = fd.get('workTypeId');
-  const hours = parseFloat(fd.get('hours'));
+  const hours = parseHM(fd.get('hours'));
   if(!date || draft.workerIds.length===0 || !workTypeId || !hours || hours<=0){
     toast('נא למלא את כל השדות החובה (תאריך, עובדים, סוג עבודה, שעות > 0)');
     return;
@@ -1749,9 +1795,9 @@ document.addEventListener('input', (e)=>{
       const hoursEl = document.getElementById('mhPreviewHours');
       const totalEl = document.getElementById('mhPreviewTotal');
       if(hoursEl && totalEl){
-        const h = parseFloat(draft.hours) || 0;
-        hoursEl.textContent = fmtNum(h);
-        totalEl.textContent = fmtNum(h * draft.workerIds.length);
+        const h = parseHM(draft.hours) || 0;
+        hoursEl.textContent = fmtHM(h);
+        totalEl.textContent = fmtHM(h * draft.workerIds.length);
       }
     }
   }
