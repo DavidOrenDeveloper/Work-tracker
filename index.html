@@ -142,6 +142,8 @@ input[type=text],input[type=date],input[type=number],select,textarea,input[type=
   border-radius:var(--radius-sm);padding:11px 12px;font-size:15px;outline:none;
 }
 input:focus,select:focus,textarea:focus{border-color:var(--amber);}
+input[type=number]{direction:ltr;text-align:right;}
+input[type=date]{direction:ltr;text-align:right;}
 textarea{resize:vertical;min-height:64px;}
 select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -687,7 +689,7 @@ function viewReportForm(editId, duplicateFrom){
         </div>
 
         <div class="field">
-          <label>מיקום / אזור</label>
+          <div class="field-label-row"><label>מיקום / אזור</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="location">✚ חדש</button></div>
           <select name="locationId">
             <option value="">— ללא —</option>
             ${locs.map(l=>`<option value="${l.id}" ${draft.locationId===l.id && !draft.locationText?'selected':''}>${esc(l.name)}</option>`).join('')}
@@ -715,7 +717,7 @@ function viewReportForm(editId, duplicateFrom){
           </select>
         </div>
 
-        ${draft.workerIds.length>1 ? `<div class="small-note">👥 ${draft.workerIds.length} עובדים × ${fmtNum(draft.hours||0)} שעות = <b class="mono">${fmtNum(manHours)}</b> שעות אדם</div>` : ''}
+        ${draft.workerIds.length>1 ? `<div class="small-note" id="manHoursPreview">👥 ${draft.workerIds.length} עובדים × <span id="mhPreviewHours">${fmtNum(draft.hours||0)}</span> שעות = <b class="mono" id="mhPreviewTotal">${fmtNum(manHours)}</b> שעות אדם</div>` : ''}
 
         <div class="field" style="margin-top:14px;">
           <label>הערות</label>
@@ -778,9 +780,10 @@ function openQuickAdd(kind){
   pushModalHistory();
   const draft = state.formDraft;
   const cats = activeOf(DB.categories);
+  const titles = {category:'קטגוריה חדשה', workType:'סוג עבודה חדש', location:'מיקום חדש'};
   const html = `<div class="overlay" id="quickAddOverlay">
     <div class="sheet">
-      <div class="sheet-head"><h3>${kind==='category' ? 'קטגוריה חדשה' : 'סוג עבודה חדש'}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <div class="sheet-head"><h3>${titles[kind]}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
       <form id="quickAddForm">
         <div class="field"><label>שם *</label><input type="text" name="name" required></div>
         ${kind==='workType' ? `<div class="field"><label>קטגוריה</label>
@@ -809,15 +812,22 @@ async function submitQuickAddForm(form){
     await saveCollection('categories');
     draft.categoryId = obj.id;
     draft.workTypeId = ""; // category changed, previous work type may not match
-  } else {
+  } else if(kind==='workType'){
     const categoryId = fd.get('categoryId') || "";
     const obj = {id:uid(), name, categoryId, active:true, order:DB.workTypes.length, createdAt:Date.now()};
     DB.workTypes.push(obj);
     await saveCollection('workTypes');
     draft.workTypeId = obj.id;
     if(categoryId) draft.categoryId = categoryId;
+  } else if(kind==='location'){
+    const obj = {id:uid(), name, active:true, order:DB.locations.length, createdAt:Date.now()};
+    DB.locations.push(obj);
+    await saveCollection('locations');
+    draft.locationId = obj.id;
+    draft.locationText = "";
   }
-  toast(kind==='category' ? 'הקטגוריה נוספה ונבחרה' : 'סוג העבודה נוסף ונבחר');
+  const labels = {category:'הקטגוריה נוספה ונבחרה', workType:'סוג העבודה נוסף ונבחר', location:'המיקום נוסף ונבחר'};
+  toast(labels[kind]);
   closeModal();
 }
 
@@ -1734,14 +1744,15 @@ document.addEventListener('input', (e)=>{
     const name = e.target.name;
     if(name && name!=='locationText') draft[name] = e.target.value;
     if(name==='locationText') draft.locationText = e.target.value;
-    // hours affects the live "man-hours" preview line — refresh it without losing focus
-    if(name==='hours' && draft.workerIds.length>1){
-      clearTimeout(document._hoursPreviewT);
-      document._hoursPreviewT = setTimeout(()=>{
-        render();
-        const el = document.querySelector('#reportForm [name=hours]');
-        if(el) el.focus();
-      }, 300);
+    // hours affects the "man-hours" preview line — update it directly, no re-render (avoids flicker/cursor jump)
+    if(name==='hours'){
+      const hoursEl = document.getElementById('mhPreviewHours');
+      const totalEl = document.getElementById('mhPreviewTotal');
+      if(hoursEl && totalEl){
+        const h = parseFloat(draft.hours) || 0;
+        hoursEl.textContent = fmtNum(h);
+        totalEl.textContent = fmtNum(h * draft.workerIds.length);
+      }
     }
   }
 });
