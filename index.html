@@ -59,7 +59,8 @@ input,select,textarea{font-family:inherit;}
   display:flex;align-items:center;gap:10px;
   padding:10px 4px 16px;
 }
-.appbar h1{font-size:19px;font-weight:800;margin:0;flex:1;letter-spacing:.2px;}
+.appbar h1{font-size:19px;font-weight:800;margin:0;letter-spacing:.2px;}
+.app-credit{font-size:10.5px;color:var(--text-dim);margin-top:2px;letter-spacing:.02em;}
 .iconbtn{
   width:38px;height:38px;border-radius:10px;border:1px solid var(--border);
   background:var(--surface-2);color:var(--text);display:flex;align-items:center;justify-content:center;
@@ -703,7 +704,10 @@ function bottomNav(){
 function appbar(title, opts={}){
   return `<div class="appbar">
     ${opts.back!==false ? `<button class="iconbtn backbtn" data-action="goBack">➜</button>` : ''}
-    <h1>${esc(title)}</h1>
+    <div style="flex:1;min-width:0;">
+      <h1>${esc(title)}</h1>
+      <div class="app-credit">פותח על ידי דוד אורן</div>
+    </div>
     ${opts.rightIcon ? `<button class="iconbtn" data-action="${opts.rightAction}">${opts.rightIcon}</button>`:''}
   </div>`;
 }
