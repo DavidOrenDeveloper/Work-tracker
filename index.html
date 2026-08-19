@@ -501,6 +501,38 @@ async function loadAll(){
     // Never block the first paint on this — save in the background regardless of outcome.
     saveAllCollections().finally(render);
   }
+  migrateReportsSchema();
+}
+
+// One-time-per-load normalization: older reports stored a single workTypeId / locationId
+// (+ optional locationText). Newer reports support choosing several work types and several
+// locations on one report, so those fields become arrays: workTypeIds / locationIds / locationTexts.
+function migrateReportsSchema(){
+  let changed = false;
+  DB.reports.forEach(r=>{
+    if(!Array.isArray(r.workTypeIds)){
+      r.workTypeIds = r.workTypeId ? [r.workTypeId] : [];
+      delete r.workTypeId;
+      changed = true;
+    }
+    if(!Array.isArray(r.locationIds)){
+      r.locationIds = r.locationId ? [r.locationId] : [];
+      delete r.locationId;
+      changed = true;
+    }
+    if(!Array.isArray(r.locationTexts)){
+      r.locationTexts = r.locationText ? [r.locationText] : [];
+      delete r.locationText;
+      changed = true;
+    }
+    if(!r.workTypeSplitMode){ r.workTypeSplitMode = 'even'; changed = true; }
+    if(!r.workTypeHours){ r.workTypeHours = {}; changed = true; }
+    if(!r.workTypeQty){ r.workTypeQty = {}; changed = true; }
+    if(!r.locationSplitMode){ r.locationSplitMode = 'even'; changed = true; }
+    if(!r.locationHours){ r.locationHours = {}; changed = true; }
+    if(!r.locationQty){ r.locationQty = {}; changed = true; }
+  });
+  if(changed) saveCollection('reports');
 }
 
 function seedDefaults(){
@@ -522,7 +554,7 @@ function seedDefaults(){
 /* ============================== STATE ============================== */
 const state = {
   route: {name:"home"},
-  historyFilters: { text:"", dateFrom:"", dateTo:"", workerIds:[], categoryId:"", workTypeId:"", locationId:"", hoursMin:"", hoursMax:"", qtyMin:"", qtyMax:"" },
+  historyFilters: { text:"", dateFrom:"", dateTo:"", workerIds:[], categoryId:"", workTypeId:"", locationId:"", hoursMin:"", hoursMax:"", qtyMin:"", qtyMax:"" }, // workTypeId/locationId filters match reports whose workTypeIds/locationIds array contains this value
   historySort: { field:"date", dir:"desc" },
   reportsPeriod: { type:"month", date: todayStr(), from:"", to:"" },
   reportsTab: "worker",
@@ -533,17 +565,70 @@ const state = {
 const byId = (arr,id) => arr.find(x=>x.id===id);
 const activeOf = (arr) => arr.filter(x=>x.active).sort((a,b)=>(a.order??0)-(b.order??0));
 const workerName = id => { const w=byId(DB.workers,id); return w? w.name : "(נמחק)"; };
-const categoryName = id => { const c=byId(DB.categories,id); return c? c.name : "(נמחק)"; };
-const workTypeName = id => { const w=byId(DB.workTypes,id); return w? w.name : "(נמחק)"; };
+const categoryName = id => { if(!id) return "—"; const c=byId(DB.categories,id); return c? c.name : "(נמחק)"; };
+const workTypeName = id => { if(!id) return "—"; const w=byId(DB.workTypes,id); return w? w.name : "(נמחק)"; };
 const locationName = (id,text) => { if(text) return text; const l=byId(DB.locations,id); return l? l.name : (id? "(נמחק)" : "—"); };
 const unitName = id => { if(!id) return ""; const u=byId(DB.units,id); return u? u.name : ""; };
+// Multi-value helpers: a report can now carry several work types and several locations.
+const workTypeNamesMulti = ids => (ids && ids.length) ? ids.map(workTypeName).join(', ') : "—";
+const locationNamesMulti = (ids,texts) => {
+  const names = [ ...((ids||[]).map(id=>{ const l=byId(DB.locations,id); return l? l.name : "(נמחק)"; })), ...(texts||[]) ];
+  return names.length ? names.join(', ') : "—";
+};
+
+/* ---- Hour/quantity-splitting helpers ----
+   When a report has several work types and/or several locations, the total hours (and,
+   if filled in, the total quantity) are, by default, split evenly across them. The person
+   can instead switch an axis to "manual" and type exact amounts per item (e.g. 0:45 at one
+   building, 1:15 at another, or 30 meters here and 20 meters there) — those must add up to
+   the report's totals. Work types and locations split independently of each other. */
+function splitNumericMap(keys, total, manualMap, parser){
+  const list = keys.length ? keys : ['__none__'];
+  const map = {};
+  if(manualMap){
+    list.forEach(k=>{ map[k] = parser(manualMap[k]) || 0; });
+  } else {
+    const even = (total||0) / list.length;
+    list.forEach(k=>{ map[k] = even; });
+  }
+  return map;
+}
+function workTypeHoursMap(r){
+  const ids = (r.workTypeIds && r.workTypeIds.length) ? r.workTypeIds : [''];
+  return splitNumericMap(ids, r.hours, (r.workTypeSplitMode==='manual' && r.workTypeHours) ? r.workTypeHours : null, parseHM);
+}
+function workTypeQtyMap(r){
+  if(!r.quantity) return {};
+  const ids = (r.workTypeIds && r.workTypeIds.length) ? r.workTypeIds : [''];
+  return splitNumericMap(ids, r.quantity, (r.workTypeSplitMode==='manual' && r.workTypeQty) ? r.workTypeQty : null, parseFloat);
+}
+function locationEntryKeys(r){
+  const idKeys = (r.locationIds||[]).map(id=>'id:'+id);
+  const textKeys = (r.locationTexts||[]).map(t=>'text:'+t);
+  return [...idKeys, ...textKeys];
+}
+function locationHoursMap(r){
+  const keys = locationEntryKeys(r);
+  return splitNumericMap(keys.length ? keys : ['none'], r.hours, (r.locationSplitMode==='manual' && r.locationHours) ? r.locationHours : null, parseHM);
+}
+function locationQtyMap(r){
+  if(!r.quantity) return {};
+  const keys = locationEntryKeys(r);
+  return splitNumericMap(keys.length ? keys : ['none'], r.quantity, (r.locationSplitMode==='manual' && r.locationQty) ? r.locationQty : null, parseFloat);
+}
+function locationKeyLabel(key){
+  if(key==='none') return '—';
+  if(key.startsWith('id:')){ const l = byId(DB.locations, key.slice(3)); return l ? l.name : '(נמחק)'; }
+  if(key.startsWith('text:')) return key.slice(5);
+  return key;
+}
 
 function isEntityUsed(type, id){
   return DB.reports.some(r=>{
     if(type==='workers') return r.workerIds.includes(id);
     if(type==='categories') return r.categoryId===id;
-    if(type==='workTypes') return r.workTypeId===id;
-    if(type==='locations') return r.locationId===id;
+    if(type==='workTypes') return (r.workTypeIds||[]).includes(id);
+    if(type==='locations') return (r.locationIds||[]).includes(id);
     if(type==='units') return r.unitId===id;
     return false;
   });
@@ -657,8 +742,8 @@ function viewHome(){
 
 /* ============================== ADD / EDIT REPORT FORM ============================== */
 function blankReport(){
-  return { id:null, date: todayStr(), workerIds:[], categoryId:"", workTypeId:"", description:"",
-    locationId:"", locationText:"", hours:"", quantity:"", unitId:"", notes:"", photo:null };
+  return { id:null, date: todayStr(), workerIds:[], categoryId:"", workTypeIds:[], workTypeSplitMode:'even', workTypeHours:{}, workTypeQty:{}, description:"",
+    locationIds:[], locationTexts:[], locationSplitMode:'even', locationHours:{}, locationQty:{}, hours:"", quantity:"", unitId:"", notes:"", photo:null };
 }
 
 function viewReportForm(editId, duplicateFrom){
@@ -683,9 +768,6 @@ function viewReportForm(editId, duplicateFrom){
   }
   state.formDraft = draft;
 
-  const cats = activeOf(DB.categories);
-  const wts = activeOf(DB.workTypes).filter(w => !draft.categoryId || w.categoryId===draft.categoryId);
-  const locs = activeOf(DB.locations);
   const units = activeOf(DB.units);
   const hoursDecimal = parseHM(draft.hours) || 0;
   const manHours = hoursDecimal && draft.workerIds.length ? (hoursDecimal*draft.workerIds.length) : 0;
@@ -709,20 +791,20 @@ function viewReportForm(editId, duplicateFrom){
           </div>
         </div>
 
-        <div class="row2">
-          <div class="field">
-            <div class="field-label-row"><label>קטגוריה *</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="category">✚ חדשה</button></div>
-            <select name="categoryId" required>
-              <option value="">בחר…</option>
-              ${cats.map(c=>`<option value="${c.id}" ${draft.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field">
-            <div class="field-label-row"><label>סוג עבודה *</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="workType">✚ חדש</button></div>
-            <select name="workTypeId" required>
-              <option value="">בחר…</option>
-              ${wts.map(w=>`<option value="${w.id}" ${draft.workTypeId===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}
-            </select>
+        <div class="field">
+          <div class="field-label-row"><label>קטגוריה (אופציונלי)</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="category">✚ חדשה</button></div>
+          <button type="button" class="selectbtn ${draft.categoryId?'':'placeholder'}" data-action="openCategoryPicker">
+            ${draft.categoryId ? esc(categoryName(draft.categoryId)) : 'בחר קטגוריה…'}
+          </button>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row"><label>סוג עבודה (אופציונלי, ${draft.workTypeIds.length} נבחרו)</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="workType">✚ חדש</button></div>
+          <button type="button" class="selectbtn ${draft.workTypeIds.length?'':'placeholder'}" data-action="openWorkTypePicker">
+            ${draft.workTypeIds.length ? 'ערוך בחירת סוגי עבודה' : 'בחר סוגי עבודה… (ניתן לבחור כמה)'}
+          </button>
+          <div class="chipset">
+            ${draft.workTypeIds.map(id=>`<span class="chip">${esc(workTypeName(id))} <span class="x" data-action="removeWorkTypeChip" data-id="${id}">×</span></span>`).join('')}
           </div>
         </div>
 
@@ -732,13 +814,14 @@ function viewReportForm(editId, duplicateFrom){
         </div>
 
         <div class="field">
-          <div class="field-label-row"><label>מיקום / אזור</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="location">✚ חדש</button></div>
-          <select name="locationId">
-            <option value="">— ללא —</option>
-            ${locs.map(l=>`<option value="${l.id}" ${draft.locationId===l.id && !draft.locationText?'selected':''}>${esc(l.name)}</option>`).join('')}
-            <option value="__free__" ${draft.locationText?'selected':''}>טקסט חופשי…</option>
-          </select>
-          <input type="text" name="locationText" placeholder="הקלד מיקום…" style="margin-top:8px; ${draft.locationText?'':'display:none'}" value="${esc(draft.locationText)}">
+          <div class="field-label-row"><label>מיקום / אזור (ניתן לבחור כמה, אופציונלי)</label><button type="button" class="addlink" data-action="openQuickAdd" data-kind="location">✚ חדש</button></div>
+          <button type="button" class="selectbtn ${(draft.locationIds.length||draft.locationTexts.length)?'':'placeholder'}" data-action="openLocationPicker">
+            ${(draft.locationIds.length||draft.locationTexts.length) ? 'ערוך בחירת מיקומים' : 'בחר מיקומים / אזורים…'}
+          </button>
+          <div class="chipset">
+            ${draft.locationIds.map(id=>{ const l=byId(DB.locations,id); return `<span class="chip">${esc(l?l.name:'(נמחק)')} <span class="x" data-action="removeLocationChip" data-id="${id}">×</span></span>`; }).join('')}
+            ${draft.locationTexts.map((t,i)=>`<span class="chip">${esc(t)} <span class="x" data-action="removeLocationTextChip" data-idx="${i}">×</span></span>`).join('')}
+          </div>
         </div>
 
         <div class="row2">
@@ -819,6 +902,206 @@ function renderWorkerPickerModal(search){
   });
 }
 
+/* ============================== CATEGORY PICKER MODAL (single-select, with delete) ============================== */
+function openCategoryPicker(){ pushModalHistory(); renderCategoryPickerModal(); }
+function renderCategoryPickerModal(){
+  const draft = state.formDraft;
+  const cats = activeOf(DB.categories);
+  const html = `
+    <div class="overlay" id="categoryModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>בחירת קטגוריה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div id="categoryListWrap">
+          <div class="msel-row ${!draft.categoryId?'checked':''}" data-action="selectCategory" data-id="">
+            <div class="msel-check">${!draft.categoryId?'✓':''}</div><div class="lbl">— ללא קטגוריה —</div>
+          </div>
+          ${cats.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין קטגוריות עדיין</div>` :
+            cats.map(c=>{
+              const checked = draft.categoryId===c.id;
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="selectCategory" data-id="${c.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="selectCategory" data-id="${c.id}" style="cursor:pointer;">${esc(c.name)}</div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteCategoryFromPicker" data-id="${c.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openQuickAdd" data-kind="category">✚ קטגוריה חדשה</button>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">סגור</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+/* ============================== WORK TYPE PICKER MODAL (multi-select) ============================== */
+function openWorkTypePicker(){ pushModalHistory(); renderWorkTypePickerModal(""); }
+function renderWorkTypePickerModal(search){
+  const draft = state.formDraft;
+  const wts = activeOf(DB.workTypes)
+    .filter(w => !draft.categoryId || w.categoryId===draft.categoryId)
+    .filter(w => w.name.toLowerCase().includes(search.toLowerCase()));
+  const html = `
+    <div class="overlay" id="workTypeModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>בחירת סוגי עבודה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <input type="search" class="search-in-modal" id="workTypeSearchInput" placeholder="חיפוש סוג עבודה…" value="${esc(search)}">
+        <div id="workTypeListWrap">
+          ${wts.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין סוגי עבודה תואמים</div>` :
+            wts.map(w=>{
+              const checked = draft.workTypeIds.includes(w.id);
+              return `<div class="msel-row ${checked?'checked':''}" data-action="toggleWorkType" data-id="${w.id}">
+                <div class="msel-check">${checked?'✓':''}</div>
+                <div class="lbl">${esc(w.name)}</div>
+              </div>`;
+            }).join('')
+          }
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openQuickAdd" data-kind="workType">✚ סוג עבודה חדש</button>
+        ${draft.workTypeIds.length>1 ? splitModeSection('workType', draft) : ''}
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${draft.workTypeIds.length} נבחרו)</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('workTypeSearchInput').addEventListener('input', e=>{
+    renderWorkTypePickerModal(e.target.value);
+    document.getElementById('workTypeSearchInput').focus();
+  });
+  updateSplitSum('workType');
+}
+
+/* ============================== LOCATION PICKER MODAL (multi-select + free text) ============================== */
+function openLocationPicker(){ pushModalHistory(); renderLocationPickerModal(""); }
+function renderLocationPickerModal(search){
+  const draft = state.formDraft;
+  const locs = activeOf(DB.locations).filter(l => l.name.toLowerCase().includes(search.toLowerCase()));
+  const html = `
+    <div class="overlay" id="locationModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>בחירת מיקומים / אזורים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <input type="search" class="search-in-modal" id="locationSearchInput" placeholder="חיפוש מיקום…" value="${esc(search)}">
+        <div id="locationListWrap">
+          ${locs.length===0 ? `<div class="empty"><div class="ic">📍</div>אין מיקומים תואמים</div>` :
+            locs.map(l=>{
+              const checked = draft.locationIds.includes(l.id);
+              return `<div class="msel-row ${checked?'checked':''}" data-action="toggleLocation" data-id="${l.id}">
+                <div class="msel-check">${checked?'✓':''}</div>
+                <div class="lbl">${esc(l.name)}</div>
+              </div>`;
+            }).join('')
+          }
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>מיקום כטקסט חופשי (אם לא ברשימה)</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="freeLocationInput" placeholder="הקלד מיקום…" style="flex:1;">
+            <button type="button" class="btn btn-outline btn-sm" data-action="addFreeLocation">הוסף</button>
+          </div>
+        </div>
+        ${draft.locationTexts.length ? `<div class="chipset" style="margin-top:8px;">
+          ${draft.locationTexts.map((t,i)=>`<span class="chip">${esc(t)} <span class="x" data-action="removeFreeLocation" data-idx="${i}">×</span></span>`).join('')}
+        </div>` : ''}
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openQuickAdd" data-kind="location">✚ מיקום חדש לרשימה</button>
+        ${(draft.locationIds.length + draft.locationTexts.length)>1 ? splitModeSection('location', draft) : ''}
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${draft.locationIds.length + draft.locationTexts.length} נבחרו)</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('locationSearchInput').addEventListener('input', e=>{
+    renderLocationPickerModal(e.target.value);
+    document.getElementById('locationSearchInput').focus();
+  });
+  const freeInput = document.getElementById('freeLocationInput');
+  if(freeInput){
+    freeInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); addFreeLocationFromInput(); }
+    });
+  }
+  updateSplitSum('location');
+}
+function addFreeLocationFromInput(){
+  const input = document.getElementById('freeLocationInput');
+  const val = (input.value||'').trim();
+  if(!val) return;
+  const draft = state.formDraft;
+  if(!draft.locationTexts.includes(val)) draft.locationTexts.push(val);
+  const searchVal = document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '';
+  renderLocationPickerModal(searchVal);
+}
+
+/* ============================== HOUR-SPLIT SECTION (shared by work type & location pickers) ============================== */
+function splitAxisItems(kind, draft){
+  if(kind==='workType'){
+    return draft.workTypeIds.map(id=>({key:id, label:workTypeName(id)}));
+  }
+  const idItems = draft.locationIds.map(id=>{ const l=byId(DB.locations,id); return {key:'id:'+id, label:l?l.name:'(נמחק)'}; });
+  const textItems = draft.locationTexts.map(t=>({key:'text:'+t, label:t}));
+  return [...idItems, ...textItems];
+}
+function splitModeSection(kind, draft){
+  const modeKey = kind+'SplitMode';
+  const hoursKey = kind+'Hours';
+  const qtyKey = kind+'Qty';
+  const mode = draft[modeKey];
+  const items = splitAxisItems(kind, draft);
+  const hoursAttr = kind==='workType' ? 'data-worktype-hours' : 'data-location-hours';
+  const qtyAttr = kind==='workType' ? 'data-worktype-qty' : 'data-location-qty';
+  const sumId = kind==='workType' ? 'wtSplitSum' : 'locSplitSum';
+  const totalId = kind==='workType' ? 'wtSplitTotal' : 'locSplitTotal';
+  const qtySumId = kind==='workType' ? 'wtQtySplitSum' : 'locQtySplitSum';
+  const qtyTotalId = kind==='workType' ? 'wtQtySplitTotal' : 'locQtySplitTotal';
+  const toggleAction = kind==='workType' ? 'toggleWorkTypeSplitMode' : 'toggleLocationSplitMode';
+  const totalQty = parseFloat(draft.quantity);
+  const hasQty = draft.quantity!=='' && draft.quantity!=null && !isNaN(totalQty) && totalQty>0;
+  return `
+    <div class="field" style="margin-top:14px;border-top:1px solid var(--border-soft);padding-top:12px;">
+      <div class="field-label-row">
+        <label>פיצול שעות${hasQty?' וכמות':''} בין ${kind==='workType'?'סוגי העבודה':'המיקומים'}</label>
+        <button type="button" class="addlink" data-action="${toggleAction}">${mode==='manual' ? 'עבור לחלוקה שווה' : 'פצל ידנית'}</button>
+      </div>
+      ${mode==='manual' ? `
+        <div class="hint" style="margin-bottom:8px;">הזן שעות${hasQty?' וכמות':''} לכל פריט (שעות בפורמט שעות.דקות, למשל 0.45 = 45 דקות). הסכום צריך להתאים לסך שהזנת בדיווח.</div>
+        ${items.map(it=>`
+          <div style="margin-bottom:10px;">
+            <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">${esc(it.label)}</div>
+            <div class="row2">
+              <input type="text" inputmode="decimal" class="hm-input" ${hoursAttr}="${esc(it.key)}" value="${esc(draft[hoursKey][it.key]||'')}" placeholder="שעות (0.00)">
+              ${hasQty ? `<input type="number" step="any" ${qtyAttr}="${esc(it.key)}" value="${esc(draft[qtyKey][it.key]||'')}" placeholder="כמות">` : ''}
+            </div>
+          </div>`).join('')}
+        <div class="small-note">שעות שהוזנו: <b id="${sumId}">0:00</b> מתוך <b id="${totalId}">0:00</b>${hasQty ? ` · כמות שהוזנה: <b id="${qtySumId}">0</b> מתוך <b id="${qtyTotalId}">0</b>` : ''}</div>
+      ` : `<div class="small-note">השעות${hasQty?' והכמות':''} יתחלקו אוטומטית ושווה בשווה בין ${items.length} הפריטים שנבחרו.</div>`}
+    </div>`;
+}
+function updateSplitSum(kind){
+  const draft = state.formDraft;
+  const modeKey = kind+'SplitMode';
+  if(!draft || draft[modeKey]!=='manual') return;
+  const hoursKey = kind+'Hours';
+  const qtyKey = kind+'Qty';
+  const items = splitAxisItems(kind, draft);
+  const sumId = kind==='workType' ? 'wtSplitSum' : 'locSplitSum';
+  const totalId = kind==='workType' ? 'wtSplitTotal' : 'locSplitTotal';
+  const qtySumId = kind==='workType' ? 'wtQtySplitSum' : 'locQtySplitSum';
+  const qtyTotalId = kind==='workType' ? 'wtQtySplitTotal' : 'locQtySplitTotal';
+  const sumEl = document.getElementById(sumId);
+  const totalEl = document.getElementById(totalId);
+  if(sumEl && totalEl){
+    const sum = items.reduce((s,it)=> s + (parseHM(draft[hoursKey][it.key]) || 0), 0);
+    const total = parseHM(draft.hours) || 0;
+    sumEl.textContent = fmtHM(sum);
+    totalEl.textContent = fmtHM(total);
+    sumEl.style.color = Math.abs(sum-total) > 0.01 ? 'var(--red)' : 'var(--green)';
+  }
+  const qtySumEl = document.getElementById(qtySumId);
+  const qtyTotalEl = document.getElementById(qtyTotalId);
+  if(qtySumEl && qtyTotalEl){
+    const qSum = items.reduce((s,it)=> s + (parseFloat(draft[qtyKey][it.key]) || 0), 0);
+    const qTotal = parseFloat(draft.quantity) || 0;
+    qtySumEl.textContent = fmtNum(qSum);
+    qtyTotalEl.textContent = fmtNum(qTotal);
+    qtySumEl.style.color = Math.abs(qSum-qTotal) > 0.01 ? 'var(--red)' : 'var(--green)';
+  }
+}
+
 /* ============================== QUICK ADD (category / work type from within report form) ============================== */
 function openQuickAdd(kind){
   pushModalHistory();
@@ -855,20 +1138,20 @@ async function submitQuickAddForm(form){
     DB.categories.push(obj);
     await saveCollection('categories');
     draft.categoryId = obj.id;
-    draft.workTypeId = ""; // category changed, previous work type may not match
+    // category changed — drop any selected work types that no longer belong to it
+    draft.workTypeIds = draft.workTypeIds.filter(wtid=>{ const w=byId(DB.workTypes,wtid); return w && w.categoryId===obj.id; });
   } else if(kind==='workType'){
     const categoryId = fd.get('categoryId') || "";
     const obj = {id:uid(), name, categoryId, active:true, order:DB.workTypes.length, createdAt:Date.now()};
     DB.workTypes.push(obj);
     await saveCollection('workTypes');
-    draft.workTypeId = obj.id;
+    if(!draft.workTypeIds.includes(obj.id)) draft.workTypeIds.push(obj.id);
     if(categoryId) draft.categoryId = categoryId;
   } else if(kind==='location'){
     const obj = {id:uid(), name, active:true, order:DB.locations.length, createdAt:Date.now()};
     DB.locations.push(obj);
     await saveCollection('locations');
-    draft.locationId = obj.id;
-    draft.locationText = "";
+    if(!draft.locationIds.includes(obj.id)) draft.locationIds.push(obj.id);
   }
   const labels = {category:'הקטגוריה נוספה ונבחרה', workType:'סוג העבודה נוסף ונבחר', location:'המיקום נוסף ונבחר'};
   toast(labels[kind]);
@@ -883,15 +1166,15 @@ function getFilteredSortedReports(){
     if(f.dateTo && r.date > f.dateTo) return false;
     if(f.workerIds.length && !f.workerIds.some(id=>r.workerIds.includes(id))) return false;
     if(f.categoryId && r.categoryId!==f.categoryId) return false;
-    if(f.workTypeId && r.workTypeId!==f.workTypeId) return false;
-    if(f.locationId && r.locationId!==f.locationId) return false;
+    if(f.workTypeId && !(r.workTypeIds||[]).includes(f.workTypeId)) return false;
+    if(f.locationId && !(r.locationIds||[]).includes(f.locationId)) return false;
     if(f.hoursMin!=="" && r.hours < parseFloat(f.hoursMin)) return false;
     if(f.hoursMax!=="" && r.hours > parseFloat(f.hoursMax)) return false;
     if(f.qtyMin!=="" && (r.quantity===null || r.quantity < parseFloat(f.qtyMin))) return false;
     if(f.qtyMax!=="" && (r.quantity===null || r.quantity > parseFloat(f.qtyMax))) return false;
     if(f.text){
       const t = f.text.toLowerCase();
-      const hay = [r.description, r.notes, locationName(r.locationId, r.locationText), workTypeName(r.workTypeId), categoryName(r.categoryId), r.workerIds.map(workerName).join(' ')].join(' ').toLowerCase();
+      const hay = [r.description, r.notes, locationNamesMulti(r.locationIds, r.locationTexts), workTypeNamesMulti(r.workTypeIds), categoryName(r.categoryId), r.workerIds.map(workerName).join(' ')].join(' ').toLowerCase();
       if(!hay.includes(t)) return false;
     }
     return true;
@@ -902,12 +1185,12 @@ function getFilteredSortedReports(){
     switch(field){
       case 'date': av=a.date; bv=b.date; break;
       case 'worker': av=workerName(a.workerIds[0]||''); bv=workerName(b.workerIds[0]||''); break;
-      case 'workType': av=workTypeName(a.workTypeId); bv=workTypeName(b.workTypeId); break;
+      case 'workType': av=workTypeNamesMulti(a.workTypeIds); bv=workTypeNamesMulti(b.workTypeIds); break;
       case 'category': av=categoryName(a.categoryId); bv=categoryName(b.categoryId); break;
       case 'hours': av=a.hours; bv=b.hours; break;
       case 'manHours': av=a.hours*a.workerIds.length; bv=b.hours*b.workerIds.length; break;
       case 'quantity': av=a.quantity||0; bv=b.quantity||0; break;
-      case 'location': av=locationName(a.locationId,a.locationText); bv=locationName(b.locationId,b.locationText); break;
+      case 'location': av=locationNamesMulti(a.locationIds,a.locationTexts); bv=locationNamesMulti(b.locationIds,b.locationTexts); break;
       default: av=a.date; bv=b.date;
     }
     if(av<bv) return dir==='asc'?-1:1;
@@ -981,11 +1264,11 @@ function reportCard(r){
   return `<div class="rcard">
     <div class="rcard-top">
       <div class="rcard-date">${fmtDateHe(r.date)}</div>
-      <span class="badge">${esc(categoryName(r.categoryId))}</span>
+      ${r.categoryId ? `<span class="badge">${esc(categoryName(r.categoryId))}</span>` : ''}
     </div>
     <div class="rcard-tags">
-      <span class="tag">🏷 ${esc(workTypeName(r.workTypeId))}</span>
-      ${locationName(r.locationId,r.locationText)!=='—' ? `<span class="tag">📍 ${esc(locationName(r.locationId,r.locationText))}</span>`:''}
+      ${(()=>{ const ids=r.workTypeIds||[]; if(ids.length>1){ const hmap=workTypeHoursMap(r); return ids.map(id=>`<span class="tag">🏷 ${esc(workTypeName(id))} (${fmtHM(hmap[id])})</span>`).join(''); } return ids.map(id=>`<span class="tag">🏷 ${esc(workTypeName(id))}</span>`).join(''); })()}
+      ${(()=>{ const keys=locationEntryKeys(r); if(keys.length>1){ const hmap=locationHoursMap(r); return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))} (${fmtHM(hmap[k])})</span>`).join(''); } return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))}</span>`).join(''); })()}
       ${r.quantity ? `<span class="tag">${fmtNum(r.quantity)} ${esc(unitName(r.unitId))}</span>`:''}
     </div>
     ${r.description ? `<div class="rcard-desc">${esc(r.description)}</div>`:''}
@@ -1087,8 +1370,11 @@ function reportsSummaryHero(list){
   const totalManHours = list.reduce((s,r)=>s+r.hours*r.workerIds.length,0);
   const workersSet = new Set(); list.forEach(r=>r.workerIds.forEach(w=>workersSet.add(w)));
   const wtCount = {};
-  list.forEach(r=>{ wtCount[r.workTypeId]=(wtCount[r.workTypeId]||0)+r.hours*r.workerIds.length; });
-  const topWt = Object.entries(wtCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id])=>workTypeName(id));
+  list.forEach(r=>{
+    const hmap = workTypeHoursMap(r);
+    Object.entries(hmap).forEach(([id,hrs])=>{ wtCount[id]=(wtCount[id]||0)+hrs*r.workerIds.length; });
+  });
+  const topWt = Object.entries(wtCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id])=>id?workTypeName(id):'ללא סוג עבודה');
   const qtyByUnit = {};
   list.forEach(r=>{ if(r.quantity){ const u=unitName(r.unitId)||'—'; qtyByUnit[u]=(qtyByUnit[u]||0)+r.quantity; } });
 
@@ -1120,8 +1406,9 @@ function reportsByWorker(list){
       if(!map[wid]) map[wid] = {hours:0, count:0, byWt:{}, byCat:{}};
       map[wid].hours += r.hours;
       map[wid].count += 1;
-      map[wid].byWt[r.workTypeId] = (map[wid].byWt[r.workTypeId]||0) + r.hours;
-      map[wid].byCat[r.categoryId] = (map[wid].byCat[r.categoryId]||0) + r.hours;
+      const hmap = workTypeHoursMap(r);
+      Object.entries(hmap).forEach(([wtid,hrs])=>{ map[wid].byWt[wtid] = (map[wid].byWt[wtid]||0) + hrs; });
+      map[wid].byCat[r.categoryId||''] = (map[wid].byCat[r.categoryId||'']||0) + r.hours;
     });
   });
   const rows = Object.entries(map).sort((a,b)=>b[1].hours-a[1].hours);
@@ -1136,52 +1423,64 @@ function reportsByWorker(list){
 function reportsByWorkType(list){
   const map = {};
   list.forEach(r=>{
-    if(!map[r.workTypeId]) map[r.workTypeId] = {hours:0, manHours:0, workers:new Set(), qty:0, unit:null};
-    const m = map[r.workTypeId];
-    m.hours += r.hours;
-    m.manHours += r.hours*r.workerIds.length;
-    r.workerIds.forEach(w=>m.workers.add(w));
-    if(r.quantity){ m.qty += r.quantity; m.unit = unitName(r.unitId); }
+    const hmap = workTypeHoursMap(r);
+    const qmap = workTypeQtyMap(r);
+    Object.entries(hmap).forEach(([id,hrs])=>{
+      if(!map[id]) map[id] = {hours:0, manHours:0, workers:new Set(), qty:0, unit:null};
+      const m = map[id];
+      m.hours += hrs;
+      m.manHours += hrs*r.workerIds.length;
+      r.workerIds.forEach(w=>m.workers.add(w));
+      if(r.quantity){ m.qty += (qmap[id]||0); m.unit = unitName(r.unitId); }
+    });
   });
   const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
   if(!rows.length) return emptyReportState();
   return `<table class="rtable"><thead><tr><th>סוג עבודה</th><th>שעות</th><th>שע"א</th><th>עובדים</th><th>תפוקה</th></tr></thead><tbody>
     ${rows.map(([id,d])=>{
+      const label = id ? workTypeName(id) : 'ללא סוג עבודה';
       const prod = d.manHours>0 && d.qty>0 ? `${fmtNum(d.qty/d.manHours)} ${esc(d.unit||'')}/שע"א` : '—';
-      return `<tr><td>${esc(workTypeName(id))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.workers.size}</td><td>${prod}</td></tr>`;
+      return `<tr><td>${esc(label)}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.workers.size}</td><td>${prod}</td></tr>`;
     }).join('')}
   </tbody></table>`;
 }
 function reportsByCategory(list){
   const map = {};
   list.forEach(r=>{
-    if(!map[r.categoryId]) map[r.categoryId] = {hours:0, manHours:0, count:0};
-    map[r.categoryId].hours += r.hours;
-    map[r.categoryId].manHours += r.hours*r.workerIds.length;
-    map[r.categoryId].count += 1;
+    const key = r.categoryId || '';
+    if(!map[key]) map[key] = {hours:0, manHours:0, count:0};
+    map[key].hours += r.hours;
+    map[key].manHours += r.hours*r.workerIds.length;
+    map[key].count += 1;
   });
   const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
   if(!rows.length) return emptyReportState();
   return `<table class="rtable"><thead><tr><th>קטגוריה</th><th>שעות</th><th>שע"א</th><th>דיווחים</th></tr></thead><tbody>
-    ${rows.map(([id,d])=>`<tr><td>${esc(categoryName(id))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.count}</td></tr>`).join('')}
+    ${rows.map(([id,d])=>`<tr><td>${esc(id?categoryName(id):'ללא קטגוריה')}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td class="num">${d.count}</td></tr>`).join('')}
   </tbody></table>`;
 }
 function reportsByLocation(list){
   const map = {};
   list.forEach(r=>{
-    const key = r.locationText ? ('t:'+r.locationText) : (r.locationId || 'none');
-    const label = locationName(r.locationId, r.locationText);
-    if(!map[key]) map[key] = {label, hours:0, manHours:0, byWt:{}};
-    map[key].hours += r.hours;
-    map[key].manHours += r.hours*r.workerIds.length;
-    map[key].byWt[r.workTypeId] = (map[key].byWt[r.workTypeId]||0)+r.hours;
+    const hmap = locationHoursMap(r);
+    const qmap = locationQtyMap(r);
+    const wtHmap = workTypeHoursMap(r);
+    Object.entries(hmap).forEach(([key,hrs])=>{
+      const label = locationKeyLabel(key);
+      if(!map[key]) map[key] = {label, hours:0, manHours:0, byWt:{}, qty:0, unit:null};
+      map[key].hours += hrs;
+      map[key].manHours += hrs*r.workerIds.length;
+      if(r.quantity){ map[key].qty += (qmap[key]||0); map[key].unit = unitName(r.unitId); }
+      Object.entries(wtHmap).forEach(([wtid])=>{ map[key].byWt[wtid] = (map[key].byWt[wtid]||0)+hrs; });
+    });
   });
   const rows = Object.entries(map).sort((a,b)=>b[1].manHours-a[1].manHours);
   if(!rows.length) return emptyReportState();
-  return `<table class="rtable"><thead><tr><th>מיקום</th><th>שעות</th><th>שע"א</th><th>סוגי עבודה</th></tr></thead><tbody>
+  return `<table class="rtable"><thead><tr><th>מיקום</th><th>שעות</th><th>שע"א</th><th>כמות</th><th>סוגי עבודה</th></tr></thead><tbody>
     ${rows.map(([k,d])=>{
-      const wts = Object.keys(d.byWt).map(workTypeName).slice(0,2).join(', ');
-      return `<tr><td>${esc(d.label)}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td>${esc(wts)}</td></tr>`;
+      const wts = Object.keys(d.byWt).map(id=>id?workTypeName(id):'ללא').slice(0,2).join(', ');
+      const qty = d.qty ? `${fmtNum(d.qty)} ${esc(d.unit||'')}` : '—';
+      return `<tr><td>${esc(d.label)}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtHM(d.manHours)}</td><td>${qty}</td><td>${esc(wts)}</td></tr>`;
     }).join('')}
   </tbody></table>`;
 }
@@ -1405,9 +1704,9 @@ function doExport(){
     "עובדים": r.workerIds.map(workerName).join(', '),
     "מס' עובדים": r.workerIds.length,
     "קטגוריה": categoryName(r.categoryId),
-    "סוג עבודה": workTypeName(r.workTypeId),
+    "סוג עבודה": workTypeNamesMulti(r.workTypeIds),
     "תיאור": r.description||'',
-    "מיקום": locationName(r.locationId, r.locationText),
+    "מיקום": locationNamesMulti(r.locationIds, r.locationTexts),
     "שעות": r.hours,
     "שעות (שעות:דקות)": fmtHM(r.hours),
     "שעות אדם": +(r.hours*r.workerIds.length).toFixed(2),
@@ -1431,16 +1730,22 @@ function doExport(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows2), "Workers Summary");
 
   // Sheet 3: Work Types Summary
+  // When a report has several work types, its hours are split between them (evenly, or by
+  // the manual amounts the person entered) — see workTypeHoursMap().
   const wtmap = {};
   list.forEach(r=>{
-    if(!wtmap[r.workTypeId]) wtmap[r.workTypeId] = {hours:0,manHours:0,workers:new Set(),qty:0,unit:''};
-    const m = wtmap[r.workTypeId];
-    m.hours += r.hours; m.manHours += r.hours*r.workerIds.length;
-    r.workerIds.forEach(w=>m.workers.add(w));
-    if(r.quantity){ m.qty += r.quantity; m.unit = unitName(r.unitId); }
+    const hmap = workTypeHoursMap(r);
+    const qmap = workTypeQtyMap(r);
+    Object.entries(hmap).forEach(([id,hrs])=>{
+      if(!wtmap[id]) wtmap[id] = {hours:0,manHours:0,workers:new Set(),qty:0,unit:''};
+      const m = wtmap[id];
+      m.hours += hrs; m.manHours += hrs*r.workerIds.length;
+      r.workerIds.forEach(w=>m.workers.add(w));
+      if(r.quantity){ m.qty += (qmap[id]||0); m.unit = unitName(r.unitId); }
+    });
   });
   const wsRows3 = Object.entries(wtmap).map(([id,d])=>({
-    "סוג עבודה": workTypeName(id), "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2),
+    "סוג עבודה": id?workTypeName(id):'ללא סוג עבודה', "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2),
     "מס' עובדים": d.workers.size, "כמות": d.qty||'', "יחידה": d.unit,
     "תפוקה (כמות/שעת אדם)": (d.manHours>0 && d.qty>0) ? +(d.qty/d.manHours).toFixed(3) : ''
   }));
@@ -1449,24 +1754,30 @@ function doExport(){
   // Sheet 4: Categories Summary
   const cmap = {};
   list.forEach(r=>{
-    if(!cmap[r.categoryId]) cmap[r.categoryId] = {hours:0,manHours:0,count:0};
-    cmap[r.categoryId].hours += r.hours; cmap[r.categoryId].manHours += r.hours*r.workerIds.length; cmap[r.categoryId].count += 1;
+    const key = r.categoryId || '';
+    if(!cmap[key]) cmap[key] = {hours:0,manHours:0,count:0};
+    cmap[key].hours += r.hours; cmap[key].manHours += r.hours*r.workerIds.length; cmap[key].count += 1;
   });
   const wsRows4 = Object.entries(cmap).map(([id,d])=>({
-    "קטגוריה": categoryName(id), "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "מספר דיווחים": d.count
+    "קטגוריה": id?categoryName(id):'ללא קטגוריה', "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "מספר דיווחים": d.count
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows4), "Categories Summary");
 
   // Sheet 5: Locations Summary
+  // Same split logic as work types — see locationHoursMap().
   const lmap = {};
   list.forEach(r=>{
-    const key = r.locationText ? ('t:'+r.locationText) : (r.locationId||'none');
-    const label = locationName(r.locationId, r.locationText);
-    if(!lmap[key]) lmap[key] = {label, hours:0, manHours:0};
-    lmap[key].hours += r.hours; lmap[key].manHours += r.hours*r.workerIds.length;
+    const hmap = locationHoursMap(r);
+    const qmap = locationQtyMap(r);
+    Object.entries(hmap).forEach(([key,hrs])=>{
+      const label = locationKeyLabel(key);
+      if(!lmap[key]) lmap[key] = {label, hours:0, manHours:0, qty:0, unit:''};
+      lmap[key].hours += hrs; lmap[key].manHours += hrs*r.workerIds.length;
+      if(r.quantity){ lmap[key].qty += (qmap[key]||0); lmap[key].unit = unitName(r.unitId); }
+    });
   });
   const wsRows5 = Object.entries(lmap).map(([k,d])=>({
-    "מיקום": d.label, "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2)
+    "מיקום": d.label, "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "כמות": d.qty||'', "יחידה": d.unit
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows5), "Locations Summary");
 
@@ -1498,6 +1809,7 @@ async function importBackupFile(file){
     const data = parsed.data || parsed;
     if(!confirm('שחזור גיבוי יחליף את כל הנתונים הקיימים במערכת. להמשיך?')) return;
     for(const c of COLLECTIONS){ if(Array.isArray(data[c])) DB[c] = data[c]; }
+    migrateReportsSchema();
     await saveAllCollections();
     toast('השחזור הושלם בהצלחה');
     go({name:'home'});
@@ -1543,26 +1855,80 @@ async function submitReportForm(form){
   const draft = state.formDraft;
   const fd = new FormData(form);
   const date = fd.get('date');
-  const categoryId = fd.get('categoryId');
-  const workTypeId = fd.get('workTypeId');
   const hours = parseHM(fd.get('hours'));
-  if(!date || draft.workerIds.length===0 || !workTypeId || !hours || hours<=0){
-    toast('נא למלא את כל השדות החובה (תאריך, עובדים, סוג עבודה, שעות > 0)');
+  if(!date || draft.workerIds.length===0 || !hours || hours<=0){
+    toast('נא למלא את כל השדות החובה (תאריך, עובדים, שעות > 0)');
     return;
   }
-  const locSelect = form.querySelector('[name=locationId]').value;
-  let locationId = "", locationText = "";
-  if(locSelect==='__free__'){ locationText = form.querySelector('[name=locationText]').value.trim(); }
-  else { locationId = locSelect; }
+
+  // If either axis was split manually, the amounts entered must add up to the report's total hours
+  // (and, when a quantity was entered, to the total quantity too).
+  const totalQtyVal = fd.get('quantity') ? parseFloat(fd.get('quantity')) : null;
+  const wtItems = splitAxisItems('workType', draft);
+  if(draft.workTypeSplitMode==='manual' && wtItems.length>1){
+    const sum = wtItems.reduce((s,it)=> s + (parseHM(draft.workTypeHours[it.key]) || 0), 0);
+    if(Math.abs(sum-hours) > 0.01){
+      toast(`סכום השעות שפוצלו בין סוגי העבודה (${fmtHM(sum)}) לא תואם לסך השעות שהזנת (${fmtHM(hours)})`);
+      return;
+    }
+    if(totalQtyVal>0){
+      const qtySum = wtItems.reduce((s,it)=> s + (parseFloat(draft.workTypeQty[it.key]) || 0), 0);
+      if(Math.abs(qtySum-totalQtyVal) > 0.01){
+        toast(`סכום הכמות שפוצלה בין סוגי העבודה (${fmtNum(qtySum)}) לא תואם לכמות שהזנת (${fmtNum(totalQtyVal)})`);
+        return;
+      }
+    }
+  }
+  const locItems = splitAxisItems('location', draft);
+  if(draft.locationSplitMode==='manual' && locItems.length>1){
+    const sum = locItems.reduce((s,it)=> s + (parseHM(draft.locationHours[it.key]) || 0), 0);
+    if(Math.abs(sum-hours) > 0.01){
+      toast(`סכום השעות שפוצלו בין המיקומים (${fmtHM(sum)}) לא תואם לסך השעות שהזנת (${fmtHM(hours)})`);
+      return;
+    }
+    if(totalQtyVal>0){
+      const qtySum = locItems.reduce((s,it)=> s + (parseFloat(draft.locationQty[it.key]) || 0), 0);
+      if(Math.abs(qtySum-totalQtyVal) > 0.01){
+        toast(`סכום הכמות שפוצלה בין המיקומים (${fmtNum(qtySum)}) לא תואם לכמות שהזנת (${fmtNum(totalQtyVal)})`);
+        return;
+      }
+    }
+  }
+  // Persist only entries for currently-selected items (drop any stale keys left over from
+  // items that were removed while in manual mode).
+  const workTypeHours = {};
+  const workTypeQty = {};
+  if(draft.workTypeSplitMode==='manual'){
+    wtItems.forEach(it=>{
+      workTypeHours[it.key] = parseHM(draft.workTypeHours[it.key]) || 0;
+      workTypeQty[it.key] = parseFloat(draft.workTypeQty[it.key]) || 0;
+    });
+  }
+  const locationHours = {};
+  const locationQty = {};
+  if(draft.locationSplitMode==='manual'){
+    locItems.forEach(it=>{
+      locationHours[it.key] = parseHM(draft.locationHours[it.key]) || 0;
+      locationQty[it.key] = parseFloat(draft.locationQty[it.key]) || 0;
+    });
+  }
 
   const rep = {
     id: draft._editId || uid(),
     date, workerIds: draft.workerIds.slice(),
-    categoryId, workTypeId,
+    categoryId: draft.categoryId || "",
+    workTypeIds: draft.workTypeIds.slice(),
+    workTypeSplitMode: (draft.workTypeIds.length>1) ? draft.workTypeSplitMode : 'even',
+    workTypeHours,
+    workTypeQty,
     description: fd.get('description')||'',
-    locationId, locationText,
+    locationIds: draft.locationIds.slice(),
+    locationTexts: draft.locationTexts.slice(),
+    locationSplitMode: ((draft.locationIds.length+draft.locationTexts.length)>1) ? draft.locationSplitMode : 'even',
+    locationHours,
+    locationQty,
     hours,
-    quantity: fd.get('quantity') ? parseFloat(fd.get('quantity')) : null,
+    quantity: totalQtyVal,
     unitId: fd.get('unitId')||'',
     notes: fd.get('notes')||'',
     photo: draft.photo || null,
@@ -1639,6 +2005,123 @@ document.addEventListener('click', async (e)=>{
       break;
     }
     case 'removePhoto': { state.formDraft.photo = null; render(); break; }
+
+    case 'openCategoryPicker': openCategoryPicker(); break;
+    case 'selectCategory': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      draft.categoryId = id;
+      // category changed — drop any selected work types that no longer belong to it
+      if(id) draft.workTypeIds = draft.workTypeIds.filter(wtid=>{ const w=byId(DB.workTypes,wtid); return w && w.categoryId===id; });
+      closeModal();
+      break;
+    }
+    case 'deleteCategoryFromPicker': {
+      const id = action.getAttribute('data-id');
+      if(isEntityUsed('categories', id)){ toast('לא ניתן למחוק קטגוריה שנמצאת בשימוש בדיווחים קיימים'); return; }
+      if(confirm('למחוק את הקטגוריה? פעולה זו בלתי הפיכה.')){
+        DB.categories = DB.categories.filter(c=>c.id!==id);
+        await saveCollection('categories');
+        const draft = state.formDraft;
+        if(draft && draft.categoryId===id) draft.categoryId = "";
+        toast('הקטגוריה נמחקה');
+        renderCategoryPickerModal();
+      }
+      break;
+    }
+
+    case 'openWorkTypePicker': openWorkTypePicker(); break;
+    case 'toggleWorkType': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      const i = draft.workTypeIds.indexOf(id);
+      if(i>=0) draft.workTypeIds.splice(i,1); else draft.workTypeIds.push(id);
+      const searchVal = document.getElementById('workTypeSearchInput') ? document.getElementById('workTypeSearchInput').value : '';
+      renderWorkTypePickerModal(searchVal);
+      break;
+    }
+    case 'toggleWorkTypeSplitMode': {
+      const draft = state.formDraft;
+      draft.workTypeSplitMode = draft.workTypeSplitMode==='manual' ? 'even' : 'manual';
+      if(draft.workTypeSplitMode==='manual'){
+        const total = parseHM(draft.hours) || 0;
+        const items = splitAxisItems('workType', draft);
+        const even = decimalToHM(items.length ? total/items.length : 0);
+        items.forEach(it=>{ if(!draft.workTypeHours[it.key]) draft.workTypeHours[it.key] = even; });
+        const totalQty = parseFloat(draft.quantity);
+        if(!isNaN(totalQty) && totalQty>0){
+          const evenQty = items.length ? totalQty/items.length : 0;
+          items.forEach(it=>{ if(draft.workTypeQty[it.key]==null || draft.workTypeQty[it.key]==='') draft.workTypeQty[it.key] = evenQty; });
+        }
+      }
+      renderWorkTypePickerModal(document.getElementById('workTypeSearchInput') ? document.getElementById('workTypeSearchInput').value : '');
+      break;
+    }
+    case 'removeWorkTypeChip': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      draft.workTypeIds = draft.workTypeIds.filter(x=>x!==id);
+      delete draft.workTypeHours[id];
+      delete draft.workTypeQty[id];
+      render();
+      break;
+    }
+
+    case 'openLocationPicker': openLocationPicker(); break;
+    case 'toggleLocation': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      const i = draft.locationIds.indexOf(id);
+      if(i>=0) draft.locationIds.splice(i,1); else draft.locationIds.push(id);
+      const searchVal = document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '';
+      renderLocationPickerModal(searchVal);
+      break;
+    }
+    case 'toggleLocationSplitMode': {
+      const draft = state.formDraft;
+      draft.locationSplitMode = draft.locationSplitMode==='manual' ? 'even' : 'manual';
+      if(draft.locationSplitMode==='manual'){
+        const total = parseHM(draft.hours) || 0;
+        const items = splitAxisItems('location', draft);
+        const even = decimalToHM(items.length ? total/items.length : 0);
+        items.forEach(it=>{ if(!draft.locationHours[it.key]) draft.locationHours[it.key] = even; });
+        const totalQty = parseFloat(draft.quantity);
+        if(!isNaN(totalQty) && totalQty>0){
+          const evenQty = items.length ? totalQty/items.length : 0;
+          items.forEach(it=>{ if(draft.locationQty[it.key]==null || draft.locationQty[it.key]==='') draft.locationQty[it.key] = evenQty; });
+        }
+      }
+      renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '');
+      break;
+    }
+    case 'addFreeLocation': addFreeLocationFromInput(); break;
+    case 'removeFreeLocation': {
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      const removed = state.formDraft.locationTexts[idx];
+      state.formDraft.locationTexts.splice(idx,1);
+      if(removed!==undefined){ delete state.formDraft.locationHours['text:'+removed]; delete state.formDraft.locationQty['text:'+removed]; }
+      const searchVal = document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '';
+      renderLocationPickerModal(searchVal);
+      break;
+    }
+    case 'removeLocationChip': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      draft.locationIds = draft.locationIds.filter(x=>x!==id);
+      delete draft.locationHours['id:'+id];
+      delete draft.locationQty['id:'+id];
+      render();
+      break;
+    }
+    case 'removeLocationTextChip': {
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      const draft = state.formDraft;
+      const removed = draft.locationTexts[idx];
+      draft.locationTexts.splice(idx,1);
+      if(removed!==undefined){ delete draft.locationHours['text:'+removed]; delete draft.locationQty['text:'+removed]; }
+      render();
+      break;
+    }
 
     case 'editReport': { state.formDraft=null; go({name:'addReport', editId: action.getAttribute('data-id')}); break; }
     case 'duplicateReport': { state.formDraft=null; go({name:'addReport', duplicateFrom: action.getAttribute('data-id')}); break; }
@@ -1746,17 +2229,6 @@ document.addEventListener('click', async (e)=>{
 
 document.addEventListener('change', async (e)=>{
   if(e.target.id==='historySearch'){ /* handled on input below */ }
-  if(e.target.name==='categoryId' && e.target.closest('#reportForm')){
-    state.formDraft.categoryId = e.target.value;
-    state.formDraft.workTypeId = "";
-    render();
-  }
-  if(e.target.name==='locationId' && e.target.closest('#reportForm')){
-    const wrap = e.target.closest('.field');
-    const txt = wrap.querySelector('[name=locationText]');
-    if(e.target.value==='__free__'){ txt.style.display='block'; txt.focus(); }
-    else { txt.style.display='none'; txt.value=''; }
-  }
   if(e.target.id==='photoInput'){
     const file = e.target.files[0];
     if(file){
@@ -1788,8 +2260,7 @@ document.addEventListener('input', (e)=>{
   if(e.target.closest('#reportForm')){
     const draft = state.formDraft;
     const name = e.target.name;
-    if(name && name!=='locationText') draft[name] = e.target.value;
-    if(name==='locationText') draft.locationText = e.target.value;
+    if(name) draft[name] = e.target.value;
     // hours affects the "man-hours" preview line — update it directly, no re-render (avoids flicker/cursor jump)
     if(name==='hours'){
       const hoursEl = document.getElementById('mhPreviewHours');
@@ -1800,6 +2271,23 @@ document.addEventListener('input', (e)=>{
         totalEl.textContent = fmtHM(h * draft.workerIds.length);
       }
     }
+  }
+  // manual hour/quantity-split inputs inside the work type / location picker modals
+  if(e.target.hasAttribute('data-worktype-hours')){
+    state.formDraft.workTypeHours[e.target.getAttribute('data-worktype-hours')] = e.target.value;
+    updateSplitSum('workType');
+  }
+  if(e.target.hasAttribute('data-location-hours')){
+    state.formDraft.locationHours[e.target.getAttribute('data-location-hours')] = e.target.value;
+    updateSplitSum('location');
+  }
+  if(e.target.hasAttribute('data-worktype-qty')){
+    state.formDraft.workTypeQty[e.target.getAttribute('data-worktype-qty')] = e.target.value;
+    updateSplitSum('workType');
+  }
+  if(e.target.hasAttribute('data-location-qty')){
+    state.formDraft.locationQty[e.target.getAttribute('data-location-qty')] = e.target.value;
+    updateSplitSum('location');
   }
 });
 
