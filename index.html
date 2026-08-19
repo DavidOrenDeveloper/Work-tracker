@@ -1195,6 +1195,14 @@ function getFilteredSortedReports(){
     }
     if(av<bv) return dir==='asc'?-1:1;
     if(av>bv) return dir==='asc'?1:-1;
+    // Tie-break: several reports often share the same date (or the same worker/category/etc).
+    // Without this, ties just kept their original storage order, so a report you entered
+    // earlier could sit above one you entered later for the same day. Break ties by when the
+    // report was actually created, in the same direction as the chosen sort — so "newest
+    // first" really does mean the most recently entered report on top.
+    const at = a.createdAt||0, bt = b.createdAt||0;
+    if(at<bt) return dir==='asc'?-1:1;
+    if(at>bt) return dir==='asc'?1:-1;
     return 0;
   });
   return list;
