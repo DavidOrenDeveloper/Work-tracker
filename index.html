@@ -94,7 +94,7 @@ input,select,textarea{font-family:inherit;}
   pointer-events:none;
 }
 .dash-label{font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:10px;}
-.dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;position:relative;}
+.dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 8px;position:relative;}
 .dash-item{text-align:center;}
 .dash-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1;}
 .dash-sub{font-size:10.5px;color:var(--text-faint);margin-top:5px;}
@@ -126,7 +126,7 @@ input,select,textarea{font-family:inherit;}
 }
 .navbtn{
   background:none;border:none;color:var(--text-faint);display:flex;flex-direction:column;align-items:center;
-  gap:2px;padding:6px 10px;border-radius:10px;cursor:pointer;font-size:10.5px;font-weight:600;
+  gap:2px;padding:6px 6px;border-radius:10px;cursor:pointer;font-size:10px;font-weight:600;
 }
 .navbtn.active{color:var(--amber);}
 .navbtn .ic{font-size:19px;}
@@ -160,6 +160,35 @@ select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns=
   border-radius:var(--radius-sm);padding:11px 12px;font-size:15px;cursor:pointer;
 }
 .selectbtn.placeholder{color:var(--text-faint);}
+.hm-display{font-family:'Courier New',monospace;font-size:18px;font-weight:700;letter-spacing:.03em;text-align:center;}
+.keypad-display{
+  font-family:'Courier New',monospace;font-size:34px;font-weight:800;text-align:center;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:14px;margin-bottom:12px;letter-spacing:.04em;
+}
+.keypad-display .ph{color:var(--text-faint);}
+.keypad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.keypad-btn{
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius-sm);padding:16px 0;font-size:20px;font-weight:700;cursor:pointer;
+}
+.keypad-btn:active{background:var(--surface-3);}
+.photo-btn{cursor:pointer;}
+.rte-toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);}
+.rte-toolbar button{background:var(--surface);border:1px solid var(--border);border-radius:8px;width:34px;height:34px;font-size:14px;cursor:pointer;color:var(--text);}
+.rte-toolbar button:active{background:var(--surface-3);}
+.rte-color{position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;}
+.rte-color input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;}
+.task-editor{min-height:180px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:15px;line-height:1.6;background:var(--surface);outline:none;}
+.task-editor:focus{border-color:var(--amber);}
+.task-editor ul,.task-editor ol{padding-inline-start:22px;margin:6px 0;}
+.task-preview{font-size:14px;line-height:1.5;max-height:90px;overflow:hidden;}
+.task-preview.done{text-decoration:line-through;opacity:.55;}
+.task-preview ul,.task-preview ol{padding-inline-start:20px;margin:4px 0;}
+.doclist{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+.docrow{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;}
+.doclink{flex:1;min-width:0;color:var(--text);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.doclink .sub{color:var(--text-faint);font-size:11px;}
 
 /* ---- Buttons ---- */
 .btn{
@@ -270,6 +299,9 @@ table.rtable tr:last-child td{border-bottom:none;}
 .thumb{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px;border:1px solid var(--border);}
 .imgpreview{position:relative;margin-top:8px;}
 .imgpreview .rm{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.6);color:#fff;border:none;width:26px;height:26px;border-radius:50%;font-size:14px;cursor:pointer;}
+.imgpreview-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.imgpreview-row .imgpreview{margin-top:0;}
+.imgpreview-row .thumb{width:78px;height:78px;max-height:78px;object-fit:cover;margin-top:0;}
 a{color:var(--amber);}
 .reorder-btns{display:flex;flex-direction:column;gap:2px;}
 .reorder-btns button{background:var(--surface-3);border:1px solid var(--border);color:var(--text-dim);width:24px;height:22px;border-radius:5px;font-size:11px;cursor:pointer;line-height:1;}
@@ -288,6 +320,28 @@ a{color:var(--amber);}
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 const todayStr = () => new Date().toISOString().slice(0,10);
 const esc = (s) => (s===undefined||s===null) ? "" : String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fmtFileSize(bytes){
+  if(!bytes) return '';
+  if(bytes < 1024*1024) return Math.round(bytes/1024)+' KB';
+  return (bytes/1024/1024).toFixed(1)+' MB';
+}
+// Generic "attach any document" field (PDFs, plans, work orders, approvals, quotes...) shared
+// by the report form and the exception form. draftHolder is 'formDraft' or 'excFormDraft'.
+function documentsField(draftHolder){
+  const draft = state[draftHolder];
+  const docs = draft.documents || [];
+  return `<div class="field">
+    <label>מסמכים נוספים (PDF, תוכניות, אישורים, הצעות מחיר וכו׳ — אופציונלי)</label>
+    <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;display:block;">📎 צירוף קובץ
+      <input type="file" multiple class="docInput" data-holder="${draftHolder}" style="display:none;">
+    </label>
+    ${docs.length ? `<div class="doclist">${docs.map((d,i)=>`
+      <div class="docrow">
+        <a href="${d.dataUrl}" target="_blank" rel="noopener" class="doclink">📄 ${esc(d.name)} <span class="sub">${esc(fmtFileSize(d.size))}</span></a>
+        <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="removeDocument" data-holder="${draftHolder}" data-idx="${i}">🗑</button>
+      </div>`).join('')}</div>` : ''}
+  </div>`;
+}
 function fmtDateHe(d){
   if(!d) return "";
   const [y,m,dd] = d.split("-");
@@ -298,27 +352,40 @@ function fmtNum(n, decimals=2){
   const r = Math.round(n*100)/100;
   return (r % 1 === 0) ? String(r) : r.toFixed(decimals).replace(/0+$/,"").replace(/\.$/,"");
 }
-/* ---- Hours entry format: H.MM (hours.minutes), NOT decimal hours ----
-   1.30 = 1 hour 30 minutes = 1.5 decimal hours (for math)
-   1.33 = 1 hour 33 minutes = 1.55 decimal hours (for math)
-   A single fractional digit is treated as a tens-of-minutes shorthand
-   (1.3 == 1.30), matching how people naturally drop a trailing zero. */
+/* ---- Hours entry format: H:MM (hours:minutes) ----
+   1:30 = 1 hour 30 minutes = 1.5 decimal hours (for math)
+   0:45 = 45 minutes = 0.75 decimal hours (for math)
+   Legacy "." separator is still accepted for old data/values (a single fractional
+   digit there is a tens-of-minutes shorthand, e.g. "1.3" == "1.30"). */
 function parseHM(str){
   if(str===''||str===null||str===undefined) return null;
   str = String(str).trim();
   if(str==='' || str==='-') return null;
   const neg = str.startsWith('-');
   if(neg) str = str.slice(1);
-  const parts = str.split('.');
-  let h = parseInt(parts[0]||'0', 10);
-  if(isNaN(h)) h = 0;
-  let m = 0;
-  if(parts.length>1 && parts[1]!==''){
-    let mStr = parts[1].replace(/[^0-9]/g,'');
-    if(mStr.length===1) mStr = mStr+'0'; // "1.3" -> 30 minutes
-    else mStr = mStr.slice(0,2);          // "1.33" -> 33 minutes; ignore extra digits
-    m = parseInt(mStr,10) || 0;
-    if(m>59) m = 59;
+  const sep = str.includes(':') ? ':' : (str.includes('.') ? '.' : null);
+  let h = 0, m = 0;
+  if(sep){
+    const parts = str.split(sep);
+    h = parseInt(parts[0]||'0', 10);
+    if(isNaN(h)) h = 0;
+    if(parts.length>1 && parts[1]!==''){
+      let mStr = parts[1].replace(/[^0-9]/g,'');
+      if(sep===':'){
+        // colon format: a single digit is a leading-zero minute (":5" -> 5 minutes, i.e. "0:05")
+        if(mStr.length===1) mStr = '0'+mStr;
+        else mStr = mStr.slice(0,2);
+      } else {
+        // legacy dot format: a single digit is a tens-of-minutes shorthand (".3" -> 30 minutes)
+        if(mStr.length===1) mStr = mStr+'0';
+        else mStr = mStr.slice(0,2);
+      }
+      m = parseInt(mStr,10) || 0;
+      if(m>59) m = 59;
+    }
+  } else {
+    h = parseInt(str, 10);
+    if(isNaN(h)) h = 0;
   }
   const decimal = h + m/60;
   return neg ? -decimal : decimal;
@@ -382,10 +449,18 @@ function compressImage(file){
     reader.readAsDataURL(file);
   });
 }
+function readFileAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ============================== STORAGE LAYER ============================== */
-const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports"];
-const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[] };
+const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks"];
+const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[] };
 
 /* Fully standalone, offline-capable persistence — no server, no account,
    no external APIs. Primary store is IndexedDB (large capacity, works
@@ -532,6 +607,7 @@ function migrateReportsSchema(){
     if(!r.locationSplitMode){ r.locationSplitMode = 'even'; changed = true; }
     if(!r.locationHours){ r.locationHours = {}; changed = true; }
     if(!r.locationQty){ r.locationQty = {}; changed = true; }
+    if(!Array.isArray(r.documents)){ r.documents = []; changed = true; }
   });
   if(changed) saveCollection('reports');
 }
@@ -560,6 +636,12 @@ const state = {
   reportsPeriod: { type:"month", date: todayStr(), from:"", to:"" },
   reportsTab: "worker",
   formDraft: null, // used for add/edit report
+  excFormDraft: null, // used for add/edit exception
+  _excLocPath: [], // drill-down path while picking a nested exception location
+  taskFormDraft: null, // used for add/edit task
+  dashPeriod: { type:"week", date: todayStr(), from:"", to:"" },
+  moneyPeriod: { type:"month", date: todayStr(), from:"", to:"" },
+  timelinePeriod: { type:"month", date: todayStr(), from:"", to:"" },
 };
 
 /* ============================== LOOKUP HELPERS ============================== */
@@ -624,7 +706,39 @@ function locationKeyLabel(key){
   return key;
 }
 
+/* ---- Smart / forgiving search ----
+   Handles the way people actually search: they don't always remember the exact spelling,
+   might type the words in a different order, or only remember part of a word. The query is
+   split into separate words; every word must appear SOMEWHERE in the text (any position —
+   start/middle/end of a longer word), in any order relative to each other. If an exact match
+   fails, we also try a "loose" comparison that strips Vav/Yod letters, which is what usually
+   differs between Hebrew plene/defective spelling (e.g. תוכניות vs תכניות, הייתי vs היתי). */
+const HEB_FINAL_LETTERS = {'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'};
+function hebrewNormalize(s){
+  return String(s||'').toLowerCase()
+    .replace(/[\u0591-\u05C7]/g,'') // strip niqqud/cantillation marks, if any
+    .split('').map(c=>HEB_FINAL_LETTERS[c]||c).join('');
+}
+function hebrewNormalizeLoose(s){
+  return hebrewNormalize(s).replace(/[וי]/g,'').replace(/[^\p{L}\p{N}]/gu,'');
+}
+function smartMatch(haystackRaw, queryRaw){
+  const query = String(queryRaw||'').trim();
+  if(!query) return true;
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const hayExact = hebrewNormalize(haystackRaw);
+  const hayLoose = hebrewNormalizeLoose(haystackRaw);
+  return tokens.every(tok=>{
+    const tokExact = hebrewNormalize(tok);
+    if(tokExact && hayExact.includes(tokExact)) return true;
+    const tokLoose = hebrewNormalizeLoose(tok);
+    return !!tokLoose && hayLoose.includes(tokLoose);
+  });
+}
+
 function isEntityUsed(type, id){
+  if(type==='exceptionCategories') return DB.exceptions.some(e=>e.categoryId===id);
+  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id));
   return DB.reports.some(r=>{
     if(type==='workers') return r.workerIds.includes(id);
     if(type==='categories') return r.categoryId===id;
@@ -644,6 +758,12 @@ function render(){
   else if(r.name==='addReport') html = viewReportForm(r.editId||null, r.duplicateFrom||null);
   else if(r.name==='history') html = viewHistory();
   else if(r.name==='reports') html = viewReports();
+  else if(r.name==='exceptions') html = viewExceptionsList();
+  else if(r.name==='exceptionForm') html = viewExceptionForm(r.editId||null);
+  else if(r.name==='tasks') html = viewTasksList();
+  else if(r.name==='taskForm') html = viewTaskForm(r.editId||null);
+  else if(r.name==='moneyClaim') html = viewMoneyClaim();
+  else if(r.name==='timeline') html = viewTimeline();
   else if(r.name==='workers') html = viewEntityManager('workers');
   else if(r.name==='catwt') html = viewCategoriesWorkTypes();
   else if(r.name==='locunits') html = viewLocationsUnits();
@@ -693,6 +813,8 @@ function bottomNav(){
     {name:'home', ic:'⌂', lb:'בית'},
     {name:'addReport', ic:'✚', lb:'דיווח'},
     {name:'history', ic:'☰', lb:'היסטוריה'},
+    {name:'exceptions', ic:'⚠', lb:'חריגים'},
+    {name:'tasks', ic:'☑', lb:'משימות'},
     {name:'reports', ic:'▤', lb:'דוחות'},
   ];
   return `<div class="bottomnav">${items.map(i=>`
@@ -713,32 +835,66 @@ function appbar(title, opts={}){
 }
 
 /* ============================== HOME ============================== */
+function getDashPeriodRange(){
+  const p = state.dashPeriod;
+  if(p.type==='day') return [p.date,p.date];
+  if(p.type==='week') return weekRange(p.date);
+  if(p.type==='month') return monthRange(p.date);
+  if(p.type==='custom') return [p.from||'0000-01-01', p.to||'9999-12-31'];
+  return weekRange(p.date);
+}
 function viewHome(){
-  const today = todayStr();
-  const todays = DB.reports.filter(r=>r.date===today);
-  const workersToday = new Set(); todays.forEach(r=>r.workerIds.forEach(w=>workersToday.add(w)));
-  const hoursToday = todays.reduce((s,r)=>s+r.hours,0);
-  const manHoursToday = todays.reduce((s,r)=>s+r.hours*r.workerIds.length,0);
+  const p = state.dashPeriod;
+  const [start,end] = getDashPeriodRange();
+  const periodReports = DB.reports.filter(r=>inRange(r.date,start,end));
+  const periodExceptions = DB.exceptions.filter(e=>inRange(e.date,start,end));
+  const hours = periodReports.reduce((s,r)=>s+r.hours,0);
+  const photoCount = periodReports.filter(r=>r.photo).length +
+    periodExceptions.reduce((s,e)=>s+(e.photosBefore||[]).length+(e.photosDuring||[]).length+(e.photosAfter||[]).length,0);
+  const excCost = periodExceptions.reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  const periodTasks = DB.tasks.filter(t=>{ const d=(t.updatedAt||t.createdAt); if(!d) return false; const ds=new Date(d).toISOString().slice(0,10); return inRange(ds,start,end); });
+  const openTasksTotal = DB.tasks.filter(t=>!t.done).length;
+  const periodLabel = {day:'היום', week:'השבוע', month:'החודש', custom:'בטווח שנבחר'}[p.type] || 'בתקופה';
 
   return `
     ${appbar('יומן עבודה', {back:false})}
+    <div class="filterbar">
+      ${['day','week','month','custom'].map(t=>`<div class="fchip ${p.type===t?'active':''}" data-action="setDashPeriodType" data-type="${t}">${{day:'היום',week:'השבוע',month:'החודש',custom:'טווח מותאם'}[t]}</div>`).join('')}
+    </div>
+    ${p.type==='custom' ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="dashPeriodFrom" value="${p.from}"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="dashPeriodTo" value="${p.to}"></div>
+        </div>
+        <button class="btn btn-outline btn-sm" data-action="applyDashPeriodCustom">החל</button>
+      </div>` : `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="field" style="margin-bottom:0;"><label>בחר תאריך בתקופה</label><input type="date" id="dashPeriodDate" value="${p.date}"></div>
+      </div>`}
     <div class="dash">
-      <div class="dash-label">סיכום היום · ${fmtDateHe(today)}</div>
+      <div class="dash-label">${periodLabel} · ${fmtDateHe(start)} – ${fmtDateHe(end)}</div>
       <div class="dash-grid">
-        <div class="dash-item"><div class="dash-num">${workersToday.size}</div><div class="dash-sub">עובדים</div></div>
-        <div class="dash-item"><div class="dash-num">${fmtHM(hoursToday)}</div><div class="dash-sub">שעות</div></div>
-        <div class="dash-item"><div class="dash-num">${fmtHM(manHoursToday)}</div><div class="dash-sub">שעות אדם</div></div>
-        <div class="dash-item"><div class="dash-num">${todays.length}</div><div class="dash-sub">דיווחים</div></div>
+        <div class="dash-item"><div class="dash-num">🕐 ${fmtHM(hours)}</div><div class="dash-sub">שעות</div></div>
+        <div class="dash-item"><div class="dash-num">⚠️ ${periodExceptions.length}</div><div class="dash-sub">חריגים</div></div>
+        <div class="dash-item"><div class="dash-num">📸 ${photoCount}</div><div class="dash-sub">תמונות</div></div>
+        <div class="dash-item"><div class="dash-num">💰 ${fmtNum(excCost)} ₪</div><div class="dash-sub">עלות חריגים</div></div>
+        <div class="dash-item"><div class="dash-num">📋 ${periodTasks.length}</div><div class="dash-sub">משימות</div></div>
+        <div class="dash-item"><div class="dash-num">🔴 ${openTasksTotal}</div><div class="dash-sub">משימות פתוחות</div></div>
       </div>
     </div>
     <div class="tiles">
       <div class="tile primary" data-nav="addReport"><span class="ic">✚</span><span class="lb">הוסף דיווח</span></div>
       <div class="tile" data-nav="history"><span class="ic">☰</span><span class="lb">היסטוריה</span></div>
+      <div class="tile" data-nav="exceptions"><span class="ic">⚠</span><span class="lb">חריגים</span></div>
+      <div class="tile" data-nav="tasks"><span class="ic">☑</span><span class="lb">משימות</span></div>
+      <div class="tile" data-nav="moneyClaim"><span class="ic">💰</span><span class="lb">כסף לתביעה</span></div>
+      <div class="tile" data-nav="timeline"><span class="ic">🕓</span><span class="lb">ציר זמן</span></div>
       <div class="tile" data-nav="reports"><span class="ic">▤</span><span class="lb">דוחות</span></div>
       <div class="tile" data-nav="workers"><span class="ic">👤</span><span class="lb">עובדים</span></div>
       <div class="tile" data-nav="catwt"><span class="ic">🏷</span><span class="lb">קטגוריות וסוגי עבודה</span></div>
       <div class="tile" data-nav="locunits"><span class="ic">📍</span><span class="lb">מיקומים ויחידות</span></div>
-      <div class="tile" data-action="openExport"><span class="ic">⭳</span><span class="lb">ייצוא Excel</span></div>
+      <div class="tile" data-action="openExport"><span class="ic">⭳</span><span class="lb">ייצוא Excel/PDF</span></div>
       <div class="tile" data-nav="settings"><span class="ic">⚙</span><span class="lb">הגדרות</span></div>
     </div>
   `;
@@ -747,7 +903,7 @@ function viewHome(){
 /* ============================== ADD / EDIT REPORT FORM ============================== */
 function blankReport(){
   return { id:null, date: todayStr(), workerIds:[], categoryId:"", workTypeIds:[], workTypeSplitMode:'even', workTypeHours:{}, workTypeQty:{}, description:"",
-    locationIds:[], locationTexts:[], locationSplitMode:'even', locationHours:{}, locationQty:{}, hours:"", quantity:"", unitId:"", notes:"", photo:null };
+    locationIds:[], locationTexts:[], locationSplitMode:'even', locationHours:{}, locationQty:{}, hours:"", quantity:"", unitId:"", notes:"", photo:null, documents:[] };
 }
 
 function viewReportForm(editId, duplicateFrom){
@@ -757,13 +913,13 @@ function viewReportForm(editId, duplicateFrom){
   } else if(editId){
     const rep = byId(DB.reports, editId);
     draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
-    draft.hours = decimalToHM(draft.hours); // stored as decimal, edited as H.MM
+    draft.hours = fmtHM(draft.hours); // stored as decimal, edited as H:MM
     draft._formKey = editId;
     draft._editId = editId;
   } else if(duplicateFrom){
     const rep = byId(DB.reports, duplicateFrom);
     draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
-    draft.hours = decimalToHM(draft.hours);
+    draft.hours = fmtHM(draft.hours);
     draft.id = null; draft.date = todayStr();
     draft._formKey = duplicateFrom;
   } else {
@@ -831,8 +987,9 @@ function viewReportForm(editId, duplicateFrom){
         <div class="row2">
           <div class="field">
             <label>מספר שעות *</label>
-            <input type="text" inputmode="decimal" class="hm-input" name="hours" placeholder="לדוגמה: 1.30" value="${esc(draft.hours)}" required>
-            <div class="hint">פורמט שעות.דקות — 1.30 = שעה וחצי, 1.33 = שעה ו-33 דקות, 0.45 = 45 דקות</div>
+            <button type="button" class="selectbtn hm-display ${draft.hours?'':'placeholder'}" data-action="openHoursKeypad">${draft.hours ? esc(draft.hours) : 'הקש להזנת שעות'}</button>
+            <input type="hidden" name="hours" value="${esc(draft.hours)}">
+            <div class="hint">פורמט שעות:דקות — 1:30 = שעה וחצי, 0:45 = 45 דקות</div>
           </div>
           <div class="field">
             <label>כמות שבוצעה</label>
@@ -858,8 +1015,13 @@ function viewReportForm(editId, duplicateFrom){
         <div class="field">
           <label>תמונה (אופציונלי)</label>
           ${draft.photo ? `<div class="imgpreview"><img class="thumb" src="${draft.photo}"><button type="button" class="rm" data-action="removePhoto">✕</button></div>`
-            : `<input type="file" accept="image/*" capture="environment" id="photoInput">`}
+            : `<div class="row2">
+                 <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">📷 צילום תמונה<input type="file" accept="image/*" capture="environment" id="photoInputCamera" style="display:none;"></label>
+                 <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 בחירה מהגלריה<input type="file" accept="image/*" id="photoInputGallery" style="display:none;"></label>
+               </div>`}
         </div>
+
+        ${documentsField('formDraft')}
       </div>
 
       <div class="btnrow">
@@ -879,7 +1041,7 @@ function openWorkerPicker(){
 }
 function renderWorkerPickerModal(search){
   const draft = state.formDraft;
-  const workers = activeOf(DB.workers).filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
+  const workers = activeOf(DB.workers).filter(w=>smartMatch(w.name, search));
   const html = `
     <div class="overlay" id="workerModalOverlay">
       <div class="sheet">
@@ -906,6 +1068,82 @@ function renderWorkerPickerModal(search){
   });
 }
 
+/* ============================== HOURS KEYPAD MODAL (custom H:MM entry) ============================== */
+function openHoursKeypad(){
+  pushModalHistory();
+  state._hoursKeypadValue = state.formDraft.hours || '';
+  renderHoursKeypadModal();
+}
+function renderHoursKeypadModal(){
+  const val = state._hoursKeypadValue || '';
+  const keys = ['7','8','9','4','5','6','1','2','3',':','0','⌫'];
+  const html = `
+    <div class="overlay" id="hoursKeypadOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>הזנת שעות</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="keypad-display" id="hoursKeypadDisplay">${val ? esc(val) : '<span class="ph">0:00</span>'}</div>
+        <div class="hint" style="margin-bottom:10px;text-align:center;">שעות:דקות — למשל 1:45 = שעה ו-45 דקות, 0:45 = 45 דקות</div>
+        <div class="keypad-grid">
+          ${keys.map(k=>`<button type="button" class="keypad-btn" data-action="hoursKeypadPress" data-key="${k}">${k}</button>`).join('')}
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="hoursKeypadConfirm">אישור</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+/* ============================== ENTITY DELETE-OR-RENAME (shared by category/work type/location pickers) ============================== */
+function refreshOpenPickerOrRender(){
+  if(document.getElementById('categoryModalOverlay')) renderCategoryPickerModal();
+  else if(document.getElementById('workTypeModalOverlay')) renderWorkTypePickerModal(document.getElementById('workTypeSearchInput') ? document.getElementById('workTypeSearchInput').value : '');
+  else if(document.getElementById('locationModalOverlay')) renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '');
+  else if(document.getElementById('excCategoryModalOverlay')) renderExcCategoryPickerModal();
+  else if(document.getElementById('excLocModalOverlay')) renderExcLocationPickerModal();
+  else render();
+}
+function clearEntityFromDraft(type, id){
+  const draft = state.formDraft;
+  if(draft){
+    if(type==='categories' && draft.categoryId===id) draft.categoryId = '';
+    if(type==='workTypes') draft.workTypeIds = draft.workTypeIds.filter(x=>x!==id);
+    if(type==='locations') draft.locationIds = draft.locationIds.filter(x=>x!==id);
+  }
+  const excDraft = state.excFormDraft;
+  if(excDraft && type==='exceptionCategories' && excDraft.categoryId===id) excDraft.categoryId = '';
+}
+async function requestEntityDelete(type, id){
+  const nameGetters = { categories: categoryName, workTypes: workTypeName, locations: lid=>{ const l=byId(DB.locations,lid); return l?l.name:'?'; }, exceptionCategories: excCategoryName };
+  const label = { categories:'הקטגוריה', workTypes:'סוג העבודה', locations:'המיקום', exceptionCategories:'קטגוריית החריגה' }[type];
+  const name = nameGetters[type](id);
+  const item = byId(DB[type], id);
+  if(!item) return;
+  if(!isEntityUsed(type, id)){
+    if(confirm(`למחוק את ${label} "${name}"? פעולה זו בלתי הפיכה.`)){
+      DB[type] = DB[type].filter(x=>x.id!==id);
+      await saveCollection(type);
+      clearEntityFromDraft(type, id);
+      toast('נמחק');
+    }
+    return;
+  }
+  // In use — let the person choose: rename (keeps existing reports pointed at the same item,
+  // just under a new name) or delete anyway (existing reports will show "(נמחק)" for it).
+  const wantsRename = confirm(`${label} "${name}" בשימוש בדיווחים קיימים.\n\nלחץ "אישור" כדי לשנות לה שם (הדיווחים הקיימים יתעדכנו אוטומטית),\nאו "ביטול" כדי לבחור מחיקה מלאה.`);
+  if(wantsRename){
+    const newName = prompt('שם חדש:', name);
+    if(newName && newName.trim() && newName.trim()!==name){
+      item.name = newName.trim();
+      await saveCollection(type);
+      toast('השם עודכן');
+    }
+  } else if(confirm(`למחוק את ${label} "${name}" לצמיתות?\nבדיווחים קיימים היא תוצג בתור "(נמחק)". פעולה זו בלתי הפיכה.`)){
+    DB[type] = DB[type].filter(x=>x.id!==id);
+    await saveCollection(type);
+    clearEntityFromDraft(type, id);
+    toast('נמחק');
+  }
+}
+
 /* ============================== CATEGORY PICKER MODAL (single-select, with delete) ============================== */
 function openCategoryPicker(){ pushModalHistory(); renderCategoryPickerModal(); }
 function renderCategoryPickerModal(){
@@ -924,7 +1162,11 @@ function renderCategoryPickerModal(){
               const checked = draft.categoryId===c.id;
               return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
                 <div class="msel-check" data-action="selectCategory" data-id="${c.id}" style="cursor:pointer;">${checked?'✓':''}</div>
-                <div class="lbl" data-action="selectCategory" data-id="${c.id}" style="cursor:pointer;">${esc(c.name)}</div>
+                <div class="lbl" data-action="selectCategory" data-id="${c.id}" style="cursor:pointer;flex:1;">${esc(c.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="categories" data-id="${c.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="categories" data-id="${c.id}" data-dir="down">▼</button>
+                </div>
                 <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteCategoryFromPicker" data-id="${c.id}">🗑</button>
               </div>`;
             }).join('')}
@@ -942,7 +1184,7 @@ function renderWorkTypePickerModal(search){
   const draft = state.formDraft;
   const wts = activeOf(DB.workTypes)
     .filter(w => !draft.categoryId || w.categoryId===draft.categoryId)
-    .filter(w => w.name.toLowerCase().includes(search.toLowerCase()));
+    .filter(w => smartMatch(w.name, search));
   const html = `
     <div class="overlay" id="workTypeModalOverlay">
       <div class="sheet">
@@ -952,9 +1194,14 @@ function renderWorkTypePickerModal(search){
           ${wts.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין סוגי עבודה תואמים</div>` :
             wts.map(w=>{
               const checked = draft.workTypeIds.includes(w.id);
-              return `<div class="msel-row ${checked?'checked':''}" data-action="toggleWorkType" data-id="${w.id}">
-                <div class="msel-check">${checked?'✓':''}</div>
-                <div class="lbl">${esc(w.name)}</div>
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="toggleWorkType" data-id="${w.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="toggleWorkType" data-id="${w.id}" style="cursor:pointer;flex:1;">${esc(w.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="workTypes" data-id="${w.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="workTypes" data-id="${w.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteWorkTypeFromPicker" data-id="${w.id}">🗑</button>
               </div>`;
             }).join('')
           }
@@ -976,7 +1223,7 @@ function renderWorkTypePickerModal(search){
 function openLocationPicker(){ pushModalHistory(); renderLocationPickerModal(""); }
 function renderLocationPickerModal(search){
   const draft = state.formDraft;
-  const locs = activeOf(DB.locations).filter(l => l.name.toLowerCase().includes(search.toLowerCase()));
+  const locs = activeOf(DB.locations).filter(l => smartMatch(l.name, search));
   const html = `
     <div class="overlay" id="locationModalOverlay">
       <div class="sheet">
@@ -986,9 +1233,14 @@ function renderLocationPickerModal(search){
           ${locs.length===0 ? `<div class="empty"><div class="ic">📍</div>אין מיקומים תואמים</div>` :
             locs.map(l=>{
               const checked = draft.locationIds.includes(l.id);
-              return `<div class="msel-row ${checked?'checked':''}" data-action="toggleLocation" data-id="${l.id}">
-                <div class="msel-check">${checked?'✓':''}</div>
-                <div class="lbl">${esc(l.name)}</div>
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="toggleLocation" data-id="${l.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="toggleLocation" data-id="${l.id}" style="cursor:pointer;flex:1;">${esc(l.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="locations" data-id="${l.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="locations" data-id="${l.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteLocationFromPicker" data-id="${l.id}">🗑</button>
               </div>`;
             }).join('')
           }
@@ -1062,12 +1314,12 @@ function splitModeSection(kind, draft){
         <button type="button" class="addlink" data-action="${toggleAction}">${mode==='manual' ? 'עבור לחלוקה שווה' : 'פצל ידנית'}</button>
       </div>
       ${mode==='manual' ? `
-        <div class="hint" style="margin-bottom:8px;">הזן שעות${hasQty?' וכמות':''} לכל פריט (שעות בפורמט שעות.דקות, למשל 0.45 = 45 דקות). הסכום צריך להתאים לסך שהזנת בדיווח.</div>
+        <div class="hint" style="margin-bottom:8px;">הזן שעות${hasQty?' וכמות':''} לכל פריט (שעות בפורמט שעות:דקות, למשל 0:45 = 45 דקות). הסכום צריך להתאים לסך שהזנת בדיווח.</div>
         ${items.map(it=>`
           <div style="margin-bottom:10px;">
             <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">${esc(it.label)}</div>
             <div class="row2">
-              <input type="text" inputmode="decimal" class="hm-input" ${hoursAttr}="${esc(it.key)}" value="${esc(draft[hoursKey][it.key]||'')}" placeholder="שעות (0.00)">
+              <input type="text" inputmode="decimal" class="hm-input" ${hoursAttr}="${esc(it.key)}" value="${esc(draft[hoursKey][it.key]||'')}" placeholder="שעות (0:00)">
               ${hasQty ? `<input type="number" step="any" ${qtyAttr}="${esc(it.key)}" value="${esc(draft[qtyKey][it.key]||'')}" placeholder="כמות">` : ''}
             </div>
           </div>`).join('')}
@@ -1177,9 +1429,8 @@ function getFilteredSortedReports(){
     if(f.qtyMin!=="" && (r.quantity===null || r.quantity < parseFloat(f.qtyMin))) return false;
     if(f.qtyMax!=="" && (r.quantity===null || r.quantity > parseFloat(f.qtyMax))) return false;
     if(f.text){
-      const t = f.text.toLowerCase();
-      const hay = [r.description, r.notes, locationNamesMulti(r.locationIds, r.locationTexts), workTypeNamesMulti(r.workTypeIds), categoryName(r.categoryId), r.workerIds.map(workerName).join(' ')].join(' ').toLowerCase();
-      if(!hay.includes(t)) return false;
+      const hay = [r.description, r.notes, locationNamesMulti(r.locationIds, r.locationTexts), workTypeNamesMulti(r.workTypeIds), categoryName(r.categoryId), r.workerIds.map(workerName).join(' ')].join(' ');
+      if(!smartMatch(hay, f.text)) return false;
     }
     return true;
   });
@@ -1302,7 +1553,7 @@ function reportCard(r){
 function openHistoryWorkerPicker(){ pushModalHistory(); renderHistoryWorkerPickerModal(""); }
 function renderHistoryWorkerPickerModal(search){
   const f = state.historyFilters;
-  const workers = DB.workers.filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
+  const workers = DB.workers.filter(w=>smartMatch(w.name, search));
   const html = `<div class="overlay" id="workerModalOverlay">
     <div class="sheet">
       <div class="sheet-head"><h3>סינון לפי עובדים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
@@ -1502,6 +1753,7 @@ function emptyReportState(){ return `<div class="empty"><div class="ic">▤</div
 const entityConfig = {
   workers: { title:'עובדים', singular:'עובד', fields:[
       {key:'name', label:'שם העובד', type:'text', required:true},
+      {key:'hourlyRate', label:'תעריף שעתי (₪, אופציונלי — לחישוב עלות לתביעה)', type:'number', required:false},
       {key:'notes', label:'הערות', type:'textarea', required:false}
     ], hasOrder:false },
   categories: { title:'קטגוריות', singular:'קטגוריה', fields:[
@@ -1523,7 +1775,7 @@ const em = { search:'', showInactive:false, sortField:'name', sortDir:'asc' };
 function viewEntityManager(type){
   const cfg = entityConfig[type];
   let list = DB[type].filter(x=> em.showInactive ? true : x.active);
-  if(em.search) list = list.filter(x=>x.name.toLowerCase().includes(em.search.toLowerCase()));
+  if(em.search) list = list.filter(x=>smartMatch(x.name, em.search));
   if(cfg.hasOrder && em.sortField==='order'){
     list.sort((a,b)=>(a.order??0)-(b.order??0));
   } else {
@@ -1579,6 +1831,7 @@ function openEntityForm(type,id){
       <form id="entityForm">
         ${cfg.fields.map(f=>{
           if(f.type==='text') return `<div class="field"><label>${f.label}${f.required?' *':''}</label><input type="text" name="${f.key}" value="${esc(item[f.key]||'')}" ${f.required?'required':''}></div>`;
+          if(f.type==='number') return `<div class="field"><label>${f.label}${f.required?' *':''}</label><input type="number" step="any" min="0" name="${f.key}" value="${esc(item[f.key]||'')}" ${f.required?'required':''}></div>`;
           if(f.type==='textarea') return `<div class="field"><label>${f.label}</label><textarea name="${f.key}">${esc(item[f.key]||'')}</textarea></div>`;
           if(f.type==='select') return `<div class="field"><label>${f.label}</label><select name="${f.key}"><option value="">— ללא —</option>${catOptions.map(c=>`<option value="${c.id}" ${item[f.key]===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>`;
           return '';
@@ -1627,7 +1880,7 @@ function viewLocationsUnits(){
 function viewEntityManagerInline(type){
   const cfg = entityConfig[type];
   let list = DB[type].filter(x=> em.showInactive ? true : x.active);
-  if(em.search) list = list.filter(x=>x.name.toLowerCase().includes(em.search.toLowerCase()));
+  if(em.search) list = list.filter(x=>smartMatch(x.name, em.search));
   list.sort((a,b)=>(a.order??0)-(b.order??0));
   return `
     <div class="field"><input type="search" id="emSearch" placeholder="חיפוש ${cfg.singular}…" value="${esc(em.search)}"></div>
@@ -1637,6 +1890,512 @@ function viewEntityManagerInline(type){
     <button class="btn btn-primary" style="margin-bottom:14px;" data-action="openEntityForm" data-type="${type}">✚ הוסף ${cfg.singular}</button>
     ${list.length===0 ? `<div class="empty"><div class="ic">📂</div>אין פריטים עדיין</div>` :
       list.map(item=>entityRow(type,item,cfg)).join('')}
+  `;
+}
+
+/* ============================== EXCEPTIONS (חריגים) MODULE ============================== */
+function blankException(){
+  return { id:null, number:null, date: todayStr(), title:'', categoryId:'', locationPathIds:[],
+    photosBefore:[], photosDuring:[], photosAfter:[], documents:[], cost:'', linkedReportId:null, notes:'' };
+}
+const excCategoryName = id => { if(!id) return "—"; const c=byId(DB.exceptionCategories,id); return c? c.name : "(נמחק)"; };
+function excLocationPathLabel(ids){
+  if(!ids || !ids.length) return '—';
+  return ids.map(id=>{ const n=byId(DB.exceptionLocations,id); return n?n.name:'(נמחק)'; }).join(' › ');
+}
+function nextExceptionNumber(){
+  const nums = DB.exceptions.map(e=>e.number||0);
+  return (nums.length ? Math.max(...nums) : 0) + 1;
+}
+
+function viewExceptionsList(){
+  const list = DB.exceptions.slice().sort((a,b)=> (b.date>a.date?1:(b.date<a.date?-1:(b.createdAt||0)-(a.createdAt||0))));
+  const totalCost = list.reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  return `
+    ${appbar('חריגים', {rightIcon:'⭳', rightAction:'openExceptionExport'})}
+    <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;">
+      <div class="small-note">${list.length} חריגים</div>
+      <div class="small-note">💰 סה"כ עלות משוערת: <b>${fmtNum(totalCost)} ₪</b></div>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:14px;" data-action="newException">✚ תיעוד חריגה חדשה</button>
+    ${list.length===0 ? `<div class="empty"><div class="ic">⚠️</div>אין חריגים מתועדים עדיין</div>` :
+      list.map(ex=>{
+        const photoCount = (ex.photosBefore||[]).length + (ex.photosDuring||[]).length + (ex.photosAfter||[]).length;
+        const linked = ex.linkedReportId ? byId(DB.reports, ex.linkedReportId) : null;
+        return `<div class="card rcard" data-action="editException" data-id="${ex.id}" style="cursor:pointer;">
+          <div class="rcard-top">
+            <div class="rcard-date">#${ex.number||'?'} · ${fmtDateHe(ex.date)}</div>
+            ${ex.categoryId ? `<span class="badge">${esc(excCategoryName(ex.categoryId))}</span>` : ''}
+          </div>
+          <div style="font-weight:600;margin:4px 0;">${esc(ex.title||'(ללא כותרת)')}</div>
+          <div class="rcard-tags">
+            ${ex.locationPathIds && ex.locationPathIds.length ? `<span class="tag">📍 ${esc(excLocationPathLabel(ex.locationPathIds))}</span>` : ''}
+            ${photoCount ? `<span class="tag">📸 ${photoCount} תמונות</span>` : ''}
+            ${ex.cost ? `<span class="tag">💰 ${fmtNum(parseFloat(ex.cost))} ₪</span>` : ''}
+            ${linked ? `<span class="tag">🔗 מקושר לדיווח ${esc(fmtDateHe(linked.date))}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+  `;
+}
+
+function excPhotoStageField(key, labelHe){
+  const draft = state.excFormDraft;
+  const photos = draft[key] || [];
+  return `<div class="field">
+    <label>תמונות ${esc(labelHe)}</label>
+    <div class="row2">
+      <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">📷 צילום<input type="file" accept="image/*" capture="environment" class="excPhotoInput" data-stage="${key}" style="display:none;"></label>
+      <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 גלריה<input type="file" accept="image/*" multiple class="excPhotoInput" data-stage="${key}" style="display:none;"></label>
+    </div>
+    ${photos.length ? `<div class="imgpreview-row">${photos.map((p,i)=>`<div class="imgpreview"><img class="thumb" src="${p}"><button type="button" class="rm" data-action="removeExcPhoto" data-stage="${key}" data-idx="${i}">✕</button></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function viewExceptionForm(editId){
+  let draft;
+  if(editId){
+    if(!(state.excFormDraft && state.excFormDraft._editId===editId)){
+      const ex = byId(DB.exceptions, editId);
+      draft = Object.assign(blankException(), JSON.parse(JSON.stringify(ex)));
+      draft._editId = editId;
+      draft.cost = (ex.cost!==null && ex.cost!==undefined) ? String(ex.cost) : '';
+    } else {
+      draft = state.excFormDraft;
+    }
+  } else {
+    draft = (state.excFormDraft && !state.excFormDraft._editId) ? state.excFormDraft : blankException();
+  }
+  state.excFormDraft = draft;
+
+  const locLabel = excLocationPathLabel(draft.locationPathIds);
+  const linkedReport = draft.linkedReportId ? byId(DB.reports, draft.linkedReportId) : null;
+
+  return `
+    ${appbar(editId ? 'עריכת חריגה' : 'תיעוד חריגה חדשה')}
+    <form id="exceptionForm" class="card">
+      <div class="field">
+        <label>תאריך *</label>
+        <input type="date" name="date" value="${esc(draft.date)}" required>
+      </div>
+      <div class="field">
+        <label>כותרת / תיאור החריגה *</label>
+        <textarea name="title" placeholder="לדוגמה: נזק לצנרת בקומה 1, עבודה ללא תוכניות מאושרות…" required>${esc(draft.title)}</textarea>
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label>קטגוריית חריגה (אופציונלי)</label><button type="button" class="addlink" data-action="openExcQuickAddCategory">✚ חדשה</button></div>
+        <button type="button" class="selectbtn ${draft.categoryId?'':'placeholder'}" data-action="openExcCategoryPicker">
+          ${draft.categoryId ? esc(excCategoryName(draft.categoryId)) : 'בחר קטגוריה… (נזק, חוסר תוכניות וכו׳)'}
+        </button>
+      </div>
+      <div class="field">
+        <label>מיקום (אופציונלי — קינון חופשי: בניין ‹ קומה ‹ חדר…)</label>
+        <button type="button" class="selectbtn ${draft.locationPathIds.length?'':'placeholder'}" data-action="openExcLocationPicker">
+          ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
+        </button>
+      </div>
+      <div class="field">
+        <label>עלות משוערת (אופציונלי, ₪)</label>
+        <input type="number" name="cost" step="any" min="0" placeholder="לצורך תיעוד לתביעה עתידית" value="${esc(draft.cost)}">
+      </div>
+
+      ${excPhotoStageField('photosBefore','לפני')}
+      ${excPhotoStageField('photosDuring','במהלך העבודה')}
+      ${excPhotoStageField('photosAfter','אחרי')}
+
+      ${documentsField('excFormDraft')}
+
+      <div class="field">
+        <label>קישור לעבודה שבוצעה בעקבות החריגה (אופציונלי)</label>
+        ${linkedReport
+          ? `<div class="chipset"><span class="chip">${esc(fmtDateHe(linkedReport.date))} — ${esc(workTypeNamesMulti(linkedReport.workTypeIds))}, ${esc(fmtHM(linkedReport.hours))} שעות <span class="x" data-action="unlinkExcReport">×</span></span></div>`
+          : `<button type="button" class="selectbtn placeholder" data-action="openExcLinkReportPicker">קשר לדיווח עבודה קיים…</button>`}
+      </div>
+
+      <div class="field">
+        <label>הערות נוספות</label>
+        <textarea name="notes" placeholder="אופציונלי…">${esc(draft.notes)}</textarea>
+      </div>
+
+      <div class="btnrow">
+        <button type="button" class="btn btn-outline" data-nav="exceptions">ביטול</button>
+        <button type="submit" class="btn btn-primary">${editId?'שמור שינויים':'שמור חריגה'}</button>
+      </div>
+      ${editId ? `<button type="button" class="btn btn-danger" style="margin-top:10px;width:100%;" data-action="deleteException" data-id="${editId}">מחיקת חריגה</button>` : ''}
+    </form>
+  `;
+}
+
+async function submitExceptionForm(form){
+  const draft = state.excFormDraft;
+  const fd = new FormData(form);
+  const date = fd.get('date');
+  const title = (fd.get('title')||'').trim();
+  if(!date || !title){ toast('נא למלא תאריך וכותרת לחריגה'); return; }
+  const ex = {
+    id: draft._editId || uid(),
+    number: draft._editId ? (byId(DB.exceptions,draft._editId)||{}).number || nextExceptionNumber() : nextExceptionNumber(),
+    date, title,
+    categoryId: draft.categoryId || '',
+    locationPathIds: draft.locationPathIds.slice(),
+    photosBefore: (draft.photosBefore||[]).slice(),
+    photosDuring: (draft.photosDuring||[]).slice(),
+    photosAfter: (draft.photosAfter||[]).slice(),
+    documents: (draft.documents||[]).slice(),
+    cost: fd.get('cost') ? parseFloat(fd.get('cost')) : null,
+    linkedReportId: draft.linkedReportId || null,
+    notes: fd.get('notes')||'',
+    createdAt: draft._editId ? (byId(DB.exceptions,draft._editId)||{}).createdAt || Date.now() : Date.now(),
+    updatedAt: Date.now()
+  };
+  const idx = DB.exceptions.findIndex(e=>e.id===ex.id);
+  if(idx>=0) DB.exceptions[idx] = ex; else DB.exceptions.push(ex);
+  await saveCollection('exceptions');
+  state.excFormDraft = null;
+  toast(draft._editId ? 'החריגה עודכנה' : `חריגה #${ex.number} נשמרה`);
+  go({name:'exceptions'});
+}
+
+/* ---- exception category picker (single-select, with delete/rename) ---- */
+function openExcCategoryPicker(){ pushModalHistory(); renderExcCategoryPickerModal(); }
+function renderExcCategoryPickerModal(){
+  const draft = state.excFormDraft;
+  const cats = activeOf(DB.exceptionCategories);
+  const html = `
+    <div class="overlay" id="excCategoryModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>קטגוריית חריגה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div id="excCategoryListWrap">
+          <div class="msel-row ${!draft.categoryId?'checked':''}" data-action="selectExcCategory" data-id="">
+            <div class="msel-check">${!draft.categoryId?'✓':''}</div><div class="lbl">— ללא קטגוריה —</div>
+          </div>
+          ${cats.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין קטגוריות עדיין — נזק, חוסר תוכניות וכו׳</div>` :
+            cats.map(c=>{
+              const checked = draft.categoryId===c.id;
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="selectExcCategory" data-id="${c.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="selectExcCategory" data-id="${c.id}" style="cursor:pointer;flex:1;">${esc(c.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="exceptionCategories" data-id="${c.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="exceptionCategories" data-id="${c.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteExcCategoryFromPicker" data-id="${c.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openExcQuickAddCategory">✚ קטגוריה חדשה</button>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">סגור</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+function openExcQuickAddCategory(){
+  const name = prompt('שם הקטגוריה החדשה (למשל: נזק, חוסר תוכניות):');
+  if(!name || !name.trim()) return;
+  const obj = {id:uid(), name:name.trim(), active:true, order:DB.exceptionCategories.length, createdAt:Date.now()};
+  DB.exceptionCategories.push(obj);
+  saveCollection('exceptionCategories').then(()=>{
+    state.excFormDraft.categoryId = obj.id;
+    refreshOpenPickerOrRender();
+  });
+}
+
+/* ---- exception hierarchical location picker (unlimited nesting, user-defined) ---- */
+function openExcLocationPicker(){
+  pushModalHistory();
+  state._excLocPath = (state.excFormDraft.locationPathIds||[]).slice();
+  renderExcLocationPickerModal();
+}
+function renderExcLocationPickerModal(){
+  const path = state._excLocPath;
+  const parentId = path.length ? path[path.length-1] : null;
+  const children = DB.exceptionLocations.filter(n=>n.parentId===parentId && n.active).sort((a,b)=>(a.order??0)-(b.order??0));
+  const crumbLabel = path.length ? path.map(id=>{ const n=byId(DB.exceptionLocations,id); return n?n.name:'?'; }).join(' › ') : 'שורש (בחר בניין/אתר)';
+  const html = `
+    <div class="overlay" id="excLocModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>בחירת מיקום</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="hint" style="margin-bottom:8px;">📍 ${esc(crumbLabel)}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          ${path.length ? `<button type="button" class="btn btn-outline btn-sm" data-action="excLocUp">⬆ רמה למעלה</button>` : ''}
+          ${path.length ? `<button type="button" class="btn btn-outline btn-sm" data-action="excLocRoot">🏠 שורש</button>` : ''}
+        </div>
+        <div id="excLocListWrap">
+          ${children.length===0 ? `<div class="empty"><div class="ic">📍</div>אין תתי-מיקום ברמה הזו עדיין</div>` :
+            children.map(n=>{
+              const hasKids = DB.exceptionLocations.some(x=>x.parentId===n.id && x.active);
+              return `<div class="msel-row" style="gap:6px;">
+                <div class="lbl" data-action="excLocDrill" data-id="${n.id}" style="flex:1;cursor:pointer;">${esc(n.name)}${hasKids?' ›':''}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="excLocDelete" data-id="${n.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="excLocAdd">✚ הוספת תת-מיקום כאן</button>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="excLocConfirm">✓ אישור מיקום זה</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+/* ---- link exception to an existing work report ---- */
+function openExcLinkReportPicker(){ pushModalHistory(); renderExcLinkReportPickerModal(''); }
+function renderExcLinkReportPickerModal(search){
+  const list = DB.reports.slice().sort((a,b)=> b.date>a.date?1:(b.date<a.date?-1:0)).filter(r=>{
+    if(!search) return true;
+    const hay = [r.description, r.notes, workTypeNamesMulti(r.workTypeIds), locationNamesMulti(r.locationIds,r.locationTexts), fmtDateHe(r.date)].join(' ');
+    return smartMatch(hay, search);
+  }).slice(0,60);
+  const html = `
+    <div class="overlay" id="excLinkReportModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>קישור לדיווח עבודה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <input type="search" class="search-in-modal" id="excLinkReportSearchInput" placeholder="חיפוש דיווח (תאריך, תיאור, מיקום…)" value="${esc(search)}">
+        <div id="excLinkReportListWrap">
+          ${list.length===0 ? `<div class="empty"><div class="ic">🔍</div>לא נמצאו דיווחים</div>` :
+            list.map(r=>`<div class="msel-row" data-action="linkExcReport" data-id="${r.id}" style="cursor:pointer;">
+              <div class="lbl" style="flex:1;">
+                <div style="font-weight:600;">${esc(fmtDateHe(r.date))} — ${esc(workTypeNamesMulti(r.workTypeIds))}</div>
+                <div class="sub">${esc(locationNamesMulti(r.locationIds,r.locationTexts))} · ${esc(fmtHM(r.hours))} שעות</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('excLinkReportSearchInput').addEventListener('input', e=>{
+    renderExcLinkReportPickerModal(e.target.value);
+    document.getElementById('excLinkReportSearchInput').focus();
+  });
+}
+
+/* ============================== TASKS (משימות) MODULE ============================== */
+function blankTask(){
+  return { id:null, done:false, contentHtml:'' };
+}
+function taskRow(t){
+  return `<div class="card rcard" style="display:flex;gap:10px;align-items:flex-start;">
+    <input type="checkbox" ${t.done?'checked':''} data-action="toggleTaskDone" data-id="${t.id}" style="margin-top:4px;width:20px;height:20px;flex-shrink:0;">
+    <div style="flex:1;min-width:0;cursor:pointer;" data-action="editTask" data-id="${t.id}">
+      <div class="task-preview ${t.done?'done':''}">${t.contentHtml || '<span style="color:var(--text-faint);">(ריק)</span>'}</div>
+    </div>
+    <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteTask" data-id="${t.id}">🗑</button>
+  </div>`;
+}
+function viewTasksList(){
+  const tasks = DB.tasks.slice().sort((a,b)=>(a.order??0)-(b.order??0));
+  const open = tasks.filter(t=>!t.done);
+  const done = tasks.filter(t=>t.done);
+  return `
+    ${appbar('משימות')}
+    <button class="btn btn-primary" style="margin-bottom:14px;" data-action="newTask">✚ משימה חדשה</button>
+    ${(open.length===0 && done.length===0) ? `<div class="empty"><div class="ic">📋</div>אין משימות עדיין</div>` : ''}
+    ${open.length ? `<div class="section-title">פתוחות (${open.length})</div>${open.map(taskRow).join('')}` : ''}
+    ${done.length ? `<div class="section-title" style="margin-top:18px;">הושלמו (${done.length})</div>${done.map(taskRow).join('')}` : ''}
+  `;
+}
+function viewTaskForm(editId){
+  let draft;
+  if(editId){
+    if(!(state.taskFormDraft && state.taskFormDraft._editId===editId)){
+      const t = byId(DB.tasks, editId);
+      draft = Object.assign(blankTask(), JSON.parse(JSON.stringify(t)));
+      draft._editId = editId;
+    } else {
+      draft = state.taskFormDraft;
+    }
+  } else {
+    draft = (state.taskFormDraft && !state.taskFormDraft._editId) ? state.taskFormDraft : blankTask();
+  }
+  state.taskFormDraft = draft;
+
+  return `
+    ${appbar(editId ? 'עריכת משימה' : 'משימה חדשה')}
+    <div class="card">
+      <div class="rte-toolbar">
+        <button type="button" data-action="taskFmt" data-cmd="undo" title="בטל פעולה">↩</button>
+        <button type="button" data-action="taskFmt" data-cmd="bold" title="מודגש"><b>B</b></button>
+        <button type="button" data-action="taskFmt" data-cmd="italic" title="נטוי"><i>I</i></button>
+        <button type="button" data-action="taskFmt" data-cmd="insertUnorderedList" title="רשימת תבליטים">•≡</button>
+        <button type="button" data-action="taskFmt" data-cmd="insertOrderedList" title="רשימה ממוספרת">1≡</button>
+        <button type="button" data-action="taskFmt" data-cmd="justifyRight" title="יישור לימין">→≡</button>
+        <button type="button" data-action="taskFmt" data-cmd="justifyCenter" title="מרכוז">≡</button>
+        <button type="button" data-action="taskFmt" data-cmd="justifyLeft" title="יישור לשמאל">≡←</button>
+        <label class="rte-color" title="צבע טקסט">A<input type="color" id="taskFontColor" value="#1a1a1a"></label>
+        <label class="rte-color" title="צבע הדגשה">🖍<input type="color" id="taskBgColor" value="#fff59d"></label>
+      </div>
+      <div id="taskEditor" class="task-editor" contenteditable="true" dir="auto">${draft.contentHtml || ''}</div>
+      <div class="btnrow" style="margin-top:14px;">
+        <button type="button" class="btn btn-outline" data-nav="tasks">ביטול</button>
+        <button type="button" class="btn btn-primary" data-action="submitTask">${editId?'שמור שינויים':'שמור משימה'}</button>
+      </div>
+      ${editId ? `<button type="button" class="btn btn-danger" style="margin-top:10px;width:100%;" data-action="deleteTask" data-id="${editId}">מחיקת משימה</button>` : ''}
+    </div>
+  `;
+}
+
+/* ============================== MONEY / COST TRACKING ============================== */
+function getMoneyPeriodRange(){
+  const p = state.moneyPeriod;
+  if(p.type==='day') return [p.date,p.date];
+  if(p.type==='week') return weekRange(p.date);
+  if(p.type==='month') return monthRange(p.date);
+  if(p.type==='custom') return [p.from||'0000-01-01', p.to||'9999-12-31'];
+  return monthRange(p.date);
+}
+function workerRate(wid){
+  const w = byId(DB.workers, wid);
+  return (w && w.hourlyRate) ? (parseFloat(w.hourlyRate)||0) : 0;
+}
+function reportCost(r){
+  return r.workerIds.reduce((s,wid)=> s + r.hours*workerRate(wid), 0);
+}
+function viewMoneyClaim(){
+  const p = state.moneyPeriod;
+  const [start,end] = getMoneyPeriodRange();
+  const reports = DB.reports.filter(r=>inRange(r.date,start,end));
+  const exceptionsList = DB.exceptions.filter(e=>inRange(e.date,start,end));
+  const workCost = reports.reduce((s,r)=>s+reportCost(r),0);
+  const excCost = exceptionsList.reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  const totalCost = workCost + excCost;
+  const totalHours = reports.reduce((s,r)=>s+r.hours,0);
+
+  const wmap = {};
+  reports.forEach(r=> r.workerIds.forEach(wid=>{
+    const rate = workerRate(wid);
+    if(!wmap[wid]) wmap[wid] = {hours:0, cost:0, rate};
+    wmap[wid].hours += r.hours;
+    wmap[wid].cost += r.hours*rate;
+  }));
+  const workerRows = Object.entries(wmap).sort((a,b)=>b[1].cost-a[1].cost);
+
+  const cmap = {};
+  exceptionsList.forEach(ex=>{
+    const key = ex.categoryId || '';
+    if(!cmap[key]) cmap[key] = {count:0, cost:0};
+    cmap[key].count += 1; cmap[key].cost += (parseFloat(ex.cost)||0);
+  });
+  const catRows = Object.entries(cmap).sort((a,b)=>b[1].cost-a[1].cost);
+
+  const periodLabel = {day:'היום', week:'השבוע', month:'החודש', custom:'בטווח שנבחר'}[p.type] || '';
+  const noRatesSet = !DB.workers.some(w=>w.hourlyRate);
+
+  return `
+    ${appbar('כסף שהצטבר לתביעה')}
+    <div class="filterbar">
+      ${['day','week','month','custom'].map(t=>`<div class="fchip ${p.type===t?'active':''}" data-action="setMoneyPeriodType" data-type="${t}">${{day:'היום',week:'השבוע',month:'החודש',custom:'טווח מותאם'}[t]}</div>`).join('')}
+    </div>
+    ${p.type==='custom' ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="moneyPeriodFrom" value="${p.from}"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="moneyPeriodTo" value="${p.to}"></div>
+        </div>
+        <button class="btn btn-outline btn-sm" data-action="applyMoneyPeriodCustom">החל</button>
+      </div>` : `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="field" style="margin-bottom:0;"><label>בחר תאריך בתקופה</label><input type="date" id="moneyPeriodDate" value="${p.date}"></div>
+      </div>`}
+    <div class="dash">
+      <div class="dash-label">${periodLabel} · ${fmtDateHe(start)} – ${fmtDateHe(end)}</div>
+      <div class="dash-grid">
+        <div class="dash-item"><div class="dash-num">🕐 ${fmtHM(totalHours)}</div><div class="dash-sub">שעות</div></div>
+        <div class="dash-item"><div class="dash-num">💵 ${fmtNum(workCost)} ₪</div><div class="dash-sub">עלות עבודה</div></div>
+        <div class="dash-item"><div class="dash-num">⚠️ ${fmtNum(excCost)} ₪</div><div class="dash-sub">עלות חריגים</div></div>
+      </div>
+    </div>
+    <div class="card" style="text-align:center;margin-bottom:16px;background:var(--amber-dim);">
+      <div class="small-note">סה"כ לתביעה</div>
+      <div style="font-size:28px;font-weight:800;font-family:'JetBrains Mono',monospace;">${fmtNum(totalCost)} ₪</div>
+    </div>
+    ${noRatesSet ? `<div class="small-note" style="margin-bottom:14px;">💡 טרם הוגדר תעריף שעתי לעובדים — עלות העבודה תוצג כ-0 עד שתגדיר תעריפים במסך "עובדים".</div>` : ''}
+    <div class="section-title">לפי עובד</div>
+    ${workerRows.length===0 ? `<div class="empty"><div class="ic">👤</div>אין נתונים בתקופה</div>` :
+      `<table class="rtable"><thead><tr><th>עובד</th><th>שעות</th><th>תעריף</th><th>עלות</th></tr></thead><tbody>
+      ${workerRows.map(([wid,d])=>`<tr><td>${esc(workerName(wid))}</td><td class="num">${fmtHM(d.hours)}</td><td class="num">${fmtNum(d.rate)} ₪</td><td class="num">${fmtNum(d.cost)} ₪</td></tr>`).join('')}
+      </tbody></table>`}
+    <div class="section-title">חריגים לפי קטגוריה</div>
+    ${catRows.length===0 ? `<div class="empty"><div class="ic">⚠️</div>אין חריגים בתקופה</div>` :
+      `<table class="rtable"><thead><tr><th>קטגוריה</th><th>מספר</th><th>עלות</th></tr></thead><tbody>
+      ${catRows.map(([id,d])=>`<tr><td>${esc(id?excCategoryName(id):'ללא קטגוריה')}</td><td class="num">${d.count}</td><td class="num">${fmtNum(d.cost)} ₪</td></tr>`).join('')}
+      </tbody></table>`}
+  `;
+}
+
+/* ============================== TIMELINE ============================== */
+function getTimelinePeriodRange(){
+  const p = state.timelinePeriod;
+  if(p.type==='all') return ['0000-01-01','9999-12-31'];
+  if(p.type==='week') return weekRange(p.date);
+  if(p.type==='month') return monthRange(p.date);
+  if(p.type==='custom') return [p.from||'0000-01-01', p.to||'9999-12-31'];
+  return monthRange(p.date);
+}
+function timelineEntry(it){
+  if(it.type==='report'){
+    const r = it.data;
+    return `<div class="card rcard" data-action="editReport" data-id="${r.id}" style="cursor:pointer;border-right:3px solid var(--amber);">
+      <div class="rcard-tags"><span class="tag">🔨 עבודה</span></div>
+      <div style="font-weight:600;">${esc(workTypeNamesMulti(r.workTypeIds))} — ${esc(locationNamesMulti(r.locationIds,r.locationTexts))}</div>
+      <div class="rcard-stats"><span>${esc(r.workerIds.map(workerName).join(', '))}</span><span><b>${esc(fmtHM(r.hours))}</b> שעות</span></div>
+    </div>`;
+  }
+  if(it.type==='exception'){
+    const ex = it.data;
+    return `<div class="card rcard" data-action="editException" data-id="${ex.id}" style="cursor:pointer;border-right:3px solid var(--red);">
+      <div class="rcard-tags"><span class="tag">⚠️ חריגה #${ex.number||''}</span></div>
+      <div style="font-weight:600;">${esc(ex.title)}</div>
+      ${ex.locationPathIds && ex.locationPathIds.length ? `<div class="rcard-workers">📍 ${esc(excLocationPathLabel(ex.locationPathIds))}</div>` : ''}
+    </div>`;
+  }
+  if(it.type==='task'){
+    const t = it.data;
+    return `<div class="card rcard" data-action="editTask" data-id="${t.id}" style="cursor:pointer;border-right:3px solid var(--text-faint);">
+      <div class="rcard-tags"><span class="tag">📋 משימה${t.done?' (הושלמה)':''}</span></div>
+      <div class="task-preview">${t.contentHtml||''}</div>
+    </div>`;
+  }
+  return '';
+}
+function viewTimeline(){
+  const p = state.timelinePeriod;
+  const [start,end] = getTimelinePeriodRange();
+  const items = [];
+  DB.reports.filter(r=>inRange(r.date,start,end)).forEach(r=> items.push({date:r.date, type:'report', data:r}));
+  DB.exceptions.filter(e=>inRange(e.date,start,end)).forEach(e=> items.push({date:e.date, type:'exception', data:e}));
+  DB.tasks.forEach(t=>{
+    const d = t.updatedAt || t.createdAt;
+    if(!d) return;
+    const ds = new Date(d).toISOString().slice(0,10);
+    if(inRange(ds,start,end)) items.push({date:ds, type:'task', data:t});
+  });
+  const byDate = {};
+  items.forEach(it=>{ if(!byDate[it.date]) byDate[it.date]=[]; byDate[it.date].push(it); });
+  const dates = Object.keys(byDate).sort((a,b)=> a<b?1:(a>b?-1:0));
+  const periodLabel = {week:'השבוע', month:'החודש', custom:'בטווח שנבחר', all:'כל הזמנים'}[p.type] || '';
+
+  return `
+    ${appbar('ציר זמן')}
+    <div class="filterbar">
+      ${['week','month','custom','all'].map(t=>`<div class="fchip ${p.type===t?'active':''}" data-action="setTimelinePeriodType" data-type="${t}">${{week:'השבוע',month:'החודש',custom:'טווח מותאם',all:'הכל'}[t]}</div>`).join('')}
+    </div>
+    ${p.type==='custom' ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="row2">
+          <div class="field"><label>מתאריך</label><input type="date" id="timelinePeriodFrom" value="${p.from}"></div>
+          <div class="field"><label>עד תאריך</label><input type="date" id="timelinePeriodTo" value="${p.to}"></div>
+        </div>
+        <button class="btn btn-outline btn-sm" data-action="applyTimelinePeriodCustom">החל</button>
+      </div>` : (p.type!=='all' ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="field" style="margin-bottom:0;"><label>בחר תאריך בתקופה</label><input type="date" id="timelinePeriodDate" value="${p.date}"></div>
+      </div>` : '')}
+    <div class="small-note" style="margin-bottom:10px;">${esc(periodLabel)} · ${dates.length} ימים עם פעילות</div>
+    ${dates.length===0 ? `<div class="empty"><div class="ic">🕓</div>אין פעילות בטווח שנבחר</div>` :
+      dates.map(d=>`<div class="section-title">${esc(fmtDateHe(d))}</div>${byDate[d].map(timelineEntry).join('')}`).join('')}
   `;
 }
 
@@ -1666,12 +2425,34 @@ function viewSettings(){
   `;
 }
 
-/* ============================== EXPORT TO EXCEL ============================== */
-function openExportModal(){
+/* ============================== EXPORT TO EXCEL / PDF ============================== */
+function downloadBlob(data, fname){
+  const blob = new Blob([data], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+}
+// Right-to-left content alignment + a filter dropdown on every header column, for a Hebrew-friendly sheet.
+function styleSheetRTL(ws){
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let R=range.s.r; R<=range.e.r; R++){
+    for(let C=range.s.c; C<=range.e.c; C++){
+      const addr = XLSX.utils.encode_cell({r:R,c:C});
+      const cell = ws[addr];
+      if(cell) cell.s = Object.assign({}, cell.s, { alignment: { horizontal:'right', readingOrder:2, vertical:'center' } });
+    }
+  }
+  ws['!autofilter'] = { ref: ws['!ref'] };
+}
+
+function openExportModal(kind){
   pushModalHistory();
-  const html = `<div class="overlay" id="exportOverlay">
+  const title = kind==='exceptions' ? 'ייצוא חריגים' : 'ייצוא ל-Excel / PDF';
+  const html = `<div class="overlay" id="exportOverlay" data-kind="${kind}">
     <div class="sheet">
-      <div class="sheet-head"><h3>ייצוא ל-Excel</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <div class="sheet-head"><h3>${esc(title)}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
       <div class="field"><label>טווח לייצוא</label>
         <select id="exportRange">
           <option value="day">היום</option>
@@ -1687,15 +2468,17 @@ function openExportModal(){
           <div class="field"><label>עד תאריך</label><input type="date" id="exportTo"></div>
         </div>
       </div>
-      <button class="btn btn-primary" data-action="doExport">⭳ ייצוא</button>
+      <div class="row2">
+        <button class="btn btn-primary" data-action="doExport">⭳ Excel</button>
+        <button class="btn btn-outline" data-action="doExportPdf">🖨 PDF</button>
+      </div>
     </div></div>`;
   document.getElementById('modalRoot').innerHTML = html;
   document.getElementById('exportRange').addEventListener('change', e=>{
     document.getElementById('exportCustomRange').style.display = e.target.value==='custom' ? 'block':'none';
   });
 }
-
-function doExport(){
+function readExportRange(){
   const rangeSel = document.getElementById('exportRange').value;
   let start='0000-01-01', end='9999-12-31';
   const today = todayStr();
@@ -1706,8 +2489,25 @@ function doExport(){
     start = document.getElementById('exportFrom').value || start;
     end = document.getElementById('exportTo').value || end;
   }
-  const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+  return {start,end};
+}
 
+function doExport(){
+  const overlay = document.getElementById('exportOverlay');
+  const kind = overlay ? overlay.getAttribute('data-kind') : 'reports';
+  const {start,end} = readExportRange();
+  if(kind==='exceptions'){
+    const list = DB.exceptions.filter(e=>inRange(e.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+    doExportExceptionsExcel(list, start, end);
+  } else {
+    const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+    doExportReportsExcel(list, start, end);
+  }
+  closeModal();
+  toast('הקובץ יוצא בהצלחה');
+}
+
+function doExportReportsExcel(list, start, end){
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Raw Data
@@ -1728,6 +2528,7 @@ function doExport(){
     "הערות": r.notes||''
   }));
   const ws1 = XLSX.utils.json_to_sheet(rawRows);
+  styleSheetRTL(ws1);
   XLSX.utils.book_append_sheet(wb, ws1, "Raw Data");
 
   // Sheet 2: Workers Summary
@@ -1739,7 +2540,9 @@ function doExport(){
   const wsRows2 = Object.entries(wmap).map(([wid,d])=>({
     "עובד": workerName(wid), "סה\"כ שעות": +d.hours.toFixed(2), "מספר דיווחים": d.count
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows2), "Workers Summary");
+  const ws2 = XLSX.utils.json_to_sheet(wsRows2);
+  styleSheetRTL(ws2);
+  XLSX.utils.book_append_sheet(wb, ws2, "Workers Summary");
 
   // Sheet 3: Work Types Summary
   // When a report has several work types, its hours are split between them (evenly, or by
@@ -1761,7 +2564,9 @@ function doExport(){
     "מס' עובדים": d.workers.size, "כמות": d.qty||'', "יחידה": d.unit,
     "תפוקה (כמות/שעת אדם)": (d.manHours>0 && d.qty>0) ? +(d.qty/d.manHours).toFixed(3) : ''
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows3), "Work Types Summary");
+  const ws3 = XLSX.utils.json_to_sheet(wsRows3);
+  styleSheetRTL(ws3);
+  XLSX.utils.book_append_sheet(wb, ws3, "Work Types Summary");
 
   // Sheet 4: Categories Summary
   const cmap = {};
@@ -1773,7 +2578,9 @@ function doExport(){
   const wsRows4 = Object.entries(cmap).map(([id,d])=>({
     "קטגוריה": id?categoryName(id):'ללא קטגוריה', "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "מספר דיווחים": d.count
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows4), "Categories Summary");
+  const ws4 = XLSX.utils.json_to_sheet(wsRows4);
+  styleSheetRTL(ws4);
+  XLSX.utils.book_append_sheet(wb, ws4, "Categories Summary");
 
   // Sheet 5: Locations Summary
   // Same split logic as work types — see locationHoursMap().
@@ -1791,17 +2598,113 @@ function doExport(){
   const wsRows5 = Object.entries(lmap).map(([k,d])=>({
     "מיקום": d.label, "סה\"כ שעות": +d.hours.toFixed(2), "שעות אדם": +d.manHours.toFixed(2), "כמות": d.qty||'', "יחידה": d.unit
   }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsRows5), "Locations Summary");
+  const ws5 = XLSX.utils.json_to_sheet(wsRows5);
+  styleSheetRTL(ws5);
+  XLSX.utils.book_append_sheet(wb, ws5, "Locations Summary");
 
+  wb.Workbook = { Views: [{ RTL: true }] };
   const fname = `דוח-עבודה_${start}_${end}.xlsx`;
-  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const blob = new Blob([wbout], {type:'application/octet-stream'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = fname; document.body.appendChild(a); a.click();
-  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  downloadBlob(wbout, fname);
+}
+
+function doExportExceptionsExcel(list, start, end){
+  const wb = XLSX.utils.book_new();
+
+  const rawRows = list.map(ex=>({
+    "מספר": ex.number||'',
+    "תאריך": fmtDateHe(ex.date),
+    "כותרת": ex.title||'',
+    "קטגוריה": excCategoryName(ex.categoryId),
+    "מיקום": excLocationPathLabel(ex.locationPathIds),
+    "עלות משוערת (₪)": ex.cost||'',
+    "תמונות - לפני": (ex.photosBefore||[]).length,
+    "תמונות - במהלך": (ex.photosDuring||[]).length,
+    "תמונות - אחרי": (ex.photosAfter||[]).length,
+    "מקושר לדיווח מתאריך": ex.linkedReportId ? fmtDateHe((byId(DB.reports,ex.linkedReportId)||{}).date||'') : '',
+    "הערות": ex.notes||''
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(rawRows);
+  styleSheetRTL(ws1);
+  XLSX.utils.book_append_sheet(wb, ws1, "חריגים");
+
+  const cmap = {};
+  list.forEach(ex=>{
+    const key = ex.categoryId||'';
+    if(!cmap[key]) cmap[key] = {count:0, cost:0};
+    cmap[key].count += 1; cmap[key].cost += (parseFloat(ex.cost)||0);
+  });
+  const wsRows2 = Object.entries(cmap).map(([id,d])=>({
+    "קטגוריה": id?excCategoryName(id):'ללא קטגוריה', "מספר חריגים": d.count, "סה\"כ עלות (₪)": +d.cost.toFixed(2)
+  }));
+  const ws2 = XLSX.utils.json_to_sheet(wsRows2);
+  styleSheetRTL(ws2);
+  XLSX.utils.book_append_sheet(wb, ws2, "סיכום לפי קטגוריה");
+
+  wb.Workbook = { Views: [{ RTL: true }] };
+  const fname = `דוח-חריגים_${start}_${end}.xlsx`;
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  downloadBlob(wbout, fname);
+}
+
+/* ---- PDF export: rendered as a print-ready RTL HTML page; the person uses the browser's
+   "Save as PDF" option in the print dialog. This needs no external library and works fully
+   offline, which matters for a site-documentation tool used without signal. ---- */
+function openPrintWindow(title, bodyHtml){
+  const w = window.open('', '_blank');
+  if(!w){ toast('הדפדפן חסם את חלון ההדפסה — יש לאפשר חלונות קופצים ולנסות שוב'); return; }
+  w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>${esc(title)}</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;direction:rtl;padding:24px;color:#111;}
+      h1{font-size:20px;margin:0 0 4px;}
+      h2{font-size:15px;margin:22px 0 8px;border-bottom:2px solid #333;padding-bottom:4px;}
+      table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px;}
+      th,td{border:1px solid #ccc;padding:6px 8px;text-align:right;}
+      th{background:#f0f0f0;}
+      tfoot td{font-weight:700;background:#fafafa;}
+      .meta{color:#555;font-size:12px;margin-bottom:16px;}
+      .credit{margin-top:34px;font-size:10px;color:#999;text-align:center;}
+      @media print{ body{padding:0;} }
+    </style></head><body>${bodyHtml}<div class="credit">פותח על ידי דוד אורן</div></body></html>`);
+  w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(err){} }, 400);
+}
+function buildReportsPrintHTML(list, start, end){
+  const totalHours = list.reduce((s,r)=>s+r.hours,0);
+  const totalManHours = list.reduce((s,r)=>s+r.hours*r.workerIds.length,0);
+  let html = `<h1>דוח עבודה</h1><div class="meta">טווח: ${esc(fmtDateHe(start))} – ${esc(fmtDateHe(end))} · הופק ב-${esc(fmtDateHe(todayStr()))}</div>`;
+  html += `<h2>נתונים (${list.length} דיווחים)</h2>`;
+  html += `<table><thead><tr><th>תאריך</th><th>עובדים</th><th>קטגוריה</th><th>סוג עבודה</th><th>מיקום</th><th>שעות</th><th>שעות אדם</th><th>כמות</th></tr></thead><tbody>`;
+  list.forEach(r=>{
+    html += `<tr><td>${esc(fmtDateHe(r.date))}</td><td>${esc(r.workerIds.map(workerName).join(', '))}</td><td>${esc(categoryName(r.categoryId))}</td><td>${esc(workTypeNamesMulti(r.workTypeIds))}</td><td>${esc(locationNamesMulti(r.locationIds,r.locationTexts))}</td><td>${esc(fmtHM(r.hours))}</td><td>${esc(fmtHM(r.hours*r.workerIds.length))}</td><td>${r.quantity?esc(fmtNum(r.quantity))+' '+esc(unitName(r.unitId)):''}</td></tr>`;
+  });
+  html += `</tbody><tfoot><tr><td colspan="5">סה"כ</td><td>${esc(fmtHM(totalHours))}</td><td>${esc(fmtHM(totalManHours))}</td><td></td></tr></tfoot></table>`;
+  return html;
+}
+function buildExceptionsPrintHTML(list, start, end){
+  const totalCost = list.reduce((s,ex)=>s+(parseFloat(ex.cost)||0),0);
+  let html = `<h1>דוח חריגים</h1><div class="meta">טווח: ${esc(fmtDateHe(start))} – ${esc(fmtDateHe(end))} · הופק ב-${esc(fmtDateHe(todayStr()))}</div>`;
+  html += `<h2>חריגים (${list.length})</h2>`;
+  html += `<table><thead><tr><th>#</th><th>תאריך</th><th>כותרת</th><th>קטגוריה</th><th>מיקום</th><th>עלות</th><th>תמונות</th></tr></thead><tbody>`;
+  list.forEach(ex=>{
+    const photoCount = (ex.photosBefore||[]).length + (ex.photosDuring||[]).length + (ex.photosAfter||[]).length;
+    html += `<tr><td>${ex.number||''}</td><td>${esc(fmtDateHe(ex.date))}</td><td>${esc(ex.title)}</td><td>${esc(excCategoryName(ex.categoryId))}</td><td>${esc(excLocationPathLabel(ex.locationPathIds))}</td><td>${ex.cost?esc(fmtNum(parseFloat(ex.cost)))+' ₪':''}</td><td>${photoCount}</td></tr>`;
+  });
+  html += `</tbody><tfoot><tr><td colspan="5">סה"כ עלות משוערת</td><td>${esc(fmtNum(totalCost))} ₪</td><td></td></tr></tfoot></table>`;
+  return html;
+}
+function doExportPdf(){
+  const overlay = document.getElementById('exportOverlay');
+  const kind = overlay ? overlay.getAttribute('data-kind') : 'reports';
+  const {start,end} = readExportRange();
+  if(kind==='exceptions'){
+    const list = DB.exceptions.filter(e=>inRange(e.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+    openPrintWindow('דוח חריגים', buildExceptionsPrintHTML(list, start, end));
+  } else {
+    const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
+    openPrintWindow('דוח עבודה', buildReportsPrintHTML(list, start, end));
+  }
   closeModal();
-  toast('הקובץ יוצא בהצלחה');
 }
 
 /* ============================== BACKUP / RESTORE / RESET ============================== */
@@ -1860,6 +2763,9 @@ document.addEventListener('submit', async (e)=>{
   } else if(e.target.id==='quickAddForm'){
     e.preventDefault();
     await submitQuickAddForm(e.target);
+  } else if(e.target.id==='exceptionForm'){
+    e.preventDefault();
+    await submitExceptionForm(e.target);
   }
 });
 
@@ -1944,6 +2850,7 @@ async function submitReportForm(form){
     unitId: fd.get('unitId')||'',
     notes: fd.get('notes')||'',
     photo: draft.photo || null,
+    documents: (draft.documents||[]).slice(),
     createdAt: draft._editId ? (byId(DB.reports,draft._editId)||{}).createdAt || Date.now() : Date.now(),
     updatedAt: Date.now()
   };
@@ -1992,8 +2899,10 @@ document.addEventListener('click', async (e)=>{
   const act = action.getAttribute('data-action');
 
   switch(act){
-    case 'openExport': openExportModal(); break;
+    case 'openExport': openExportModal('reports'); break;
+    case 'openExceptionExport': openExportModal('exceptions'); break;
     case 'doExport': doExport(); break;
+    case 'doExportPdf': doExportPdf(); break;
     case 'closeModal': closeModal(); break;
 
     case 'goBack': goBack(); break;
@@ -2017,6 +2926,48 @@ document.addEventListener('click', async (e)=>{
       break;
     }
     case 'removePhoto': { state.formDraft.photo = null; render(); break; }
+    case 'removeDocument': {
+      const holder = action.getAttribute('data-holder');
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      if(state[holder] && state[holder].documents) state[holder].documents.splice(idx,1);
+      render();
+      break;
+    }
+
+    case 'openHoursKeypad': openHoursKeypad(); break;
+    case 'hoursKeypadPress': {
+      const key = action.getAttribute('data-key');
+      let val = state._hoursKeypadValue || '';
+      if(key==='⌫'){ val = val.slice(0,-1); }
+      else if(key===':'){ if(!val.includes(':')) val += ':'; }
+      else { // digit
+        if(val.includes(':')){
+          const [h,m] = val.split(':');
+          if(m.length<2) val = h+':'+m+key;
+        } else {
+          if(val.length<3) val += key; // allow up to 3-digit hour part before the colon
+        }
+      }
+      state._hoursKeypadValue = val;
+      const disp = document.getElementById('hoursKeypadDisplay');
+      if(disp) disp.innerHTML = val ? esc(val) : '<span class="ph">0:00</span>';
+      break;
+    }
+    case 'hoursKeypadConfirm': {
+      let val = state._hoursKeypadValue || '';
+      if(val){
+        let [h,m] = val.split(':');
+        if(h===undefined || h==='') h='0';
+        if(m===undefined || m==='') m='00';
+        else if(m.length===1) m='0'+m;
+        const mNum = Math.min(59, parseInt(m,10)||0);
+        val = parseInt(h,10) + ':' + String(mNum).padStart(2,'0');
+      }
+      state.formDraft.hours = val;
+      closeModal();
+      render();
+      break;
+    }
 
     case 'openCategoryPicker': openCategoryPicker(); break;
     case 'selectCategory': {
@@ -2030,15 +2981,8 @@ document.addEventListener('click', async (e)=>{
     }
     case 'deleteCategoryFromPicker': {
       const id = action.getAttribute('data-id');
-      if(isEntityUsed('categories', id)){ toast('לא ניתן למחוק קטגוריה שנמצאת בשימוש בדיווחים קיימים'); return; }
-      if(confirm('למחוק את הקטגוריה? פעולה זו בלתי הפיכה.')){
-        DB.categories = DB.categories.filter(c=>c.id!==id);
-        await saveCollection('categories');
-        const draft = state.formDraft;
-        if(draft && draft.categoryId===id) draft.categoryId = "";
-        toast('הקטגוריה נמחקה');
-        renderCategoryPickerModal();
-      }
+      await requestEntityDelete('categories', id);
+      refreshOpenPickerOrRender();
       break;
     }
 
@@ -2058,7 +3002,7 @@ document.addEventListener('click', async (e)=>{
       if(draft.workTypeSplitMode==='manual'){
         const total = parseHM(draft.hours) || 0;
         const items = splitAxisItems('workType', draft);
-        const even = decimalToHM(items.length ? total/items.length : 0);
+        const even = fmtHM(items.length ? total/items.length : 0);
         items.forEach(it=>{ if(!draft.workTypeHours[it.key]) draft.workTypeHours[it.key] = even; });
         const totalQty = parseFloat(draft.quantity);
         if(!isNaN(totalQty) && totalQty>0){
@@ -2078,6 +3022,12 @@ document.addEventListener('click', async (e)=>{
       render();
       break;
     }
+    case 'deleteWorkTypeFromPicker': {
+      const id = action.getAttribute('data-id');
+      await requestEntityDelete('workTypes', id);
+      refreshOpenPickerOrRender();
+      break;
+    }
 
     case 'openLocationPicker': openLocationPicker(); break;
     case 'toggleLocation': {
@@ -2095,7 +3045,7 @@ document.addEventListener('click', async (e)=>{
       if(draft.locationSplitMode==='manual'){
         const total = parseHM(draft.hours) || 0;
         const items = splitAxisItems('location', draft);
-        const even = decimalToHM(items.length ? total/items.length : 0);
+        const even = fmtHM(items.length ? total/items.length : 0);
         items.forEach(it=>{ if(!draft.locationHours[it.key]) draft.locationHours[it.key] = even; });
         const totalQty = parseFloat(draft.quantity);
         if(!isNaN(totalQty) && totalQty>0){
@@ -2125,6 +3075,12 @@ document.addEventListener('click', async (e)=>{
       render();
       break;
     }
+    case 'deleteLocationFromPicker': {
+      const id = action.getAttribute('data-id');
+      await requestEntityDelete('locations', id);
+      refreshOpenPickerOrRender();
+      break;
+    }
     case 'removeLocationTextChip': {
       const idx = parseInt(action.getAttribute('data-idx'),10);
       const draft = state.formDraft;
@@ -2147,6 +3103,82 @@ document.addEventListener('click', async (e)=>{
       }
       break;
     }
+
+    /* ---- Exceptions ---- */
+    case 'newException': { state.excFormDraft=null; go({name:'exceptionForm'}); break; }
+    case 'editException': { state.excFormDraft=null; go({name:'exceptionForm', editId: action.getAttribute('data-id')}); break; }
+    case 'deleteException': {
+      const id = action.getAttribute('data-id');
+      if(confirm('למחוק את החריגה? פעולה זו בלתי הפיכה.')){
+        DB.exceptions = DB.exceptions.filter(e=>e.id!==id);
+        await saveCollection('exceptions');
+        toast('החריגה נמחקה');
+        go({name:'exceptions'});
+      }
+      break;
+    }
+    case 'removeExcPhoto': {
+      const stage = action.getAttribute('data-stage');
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      const draft = state.excFormDraft;
+      if(draft && draft[stage]) draft[stage].splice(idx,1);
+      render();
+      break;
+    }
+    case 'openExcCategoryPicker': openExcCategoryPicker(); break;
+    case 'openExcQuickAddCategory': openExcQuickAddCategory(); break;
+    case 'selectExcCategory': {
+      state.excFormDraft.categoryId = action.getAttribute('data-id');
+      closeModal();
+      break;
+    }
+    case 'deleteExcCategoryFromPicker': {
+      const id = action.getAttribute('data-id');
+      await requestEntityDelete('exceptionCategories', id);
+      refreshOpenPickerOrRender();
+      break;
+    }
+    case 'openExcLocationPicker': openExcLocationPicker(); break;
+    case 'excLocDrill': { state._excLocPath.push(action.getAttribute('data-id')); renderExcLocationPickerModal(); break; }
+    case 'excLocUp': { state._excLocPath.pop(); renderExcLocationPickerModal(); break; }
+    case 'excLocRoot': { state._excLocPath = []; renderExcLocationPickerModal(); break; }
+    case 'excLocAdd': {
+      const name = prompt('שם תת-המיקום (למשל: קומה 1, חדר משרדי הנהלה):');
+      if(name && name.trim()){
+        const parentId = state._excLocPath.length ? state._excLocPath[state._excLocPath.length-1] : null;
+        const siblingCount = DB.exceptionLocations.filter(x=>x.parentId===parentId).length;
+        DB.exceptionLocations.push({id:uid(), name:name.trim(), parentId, active:true, order:siblingCount, createdAt:Date.now()});
+        await saveCollection('exceptionLocations');
+      }
+      renderExcLocationPickerModal();
+      break;
+    }
+    case 'excLocDelete': {
+      const id = action.getAttribute('data-id');
+      const hasKids = DB.exceptionLocations.some(x=>x.parentId===id && x.active);
+      if(hasKids){ toast('לא ניתן למחוק מיקום שיש לו תתי-מיקום — מחק קודם אותם'); break; }
+      const used = isEntityUsed('exceptionLocations', id);
+      const msg = used ? 'המיקום בשימוש בחריגים קיימים. למחוק בכל זאת? (בחריגים קיימים יוצג "נמחק")' : 'למחוק את תת-המיקום?';
+      if(confirm(msg)){
+        DB.exceptionLocations = DB.exceptionLocations.filter(x=>x.id!==id);
+        await saveCollection('exceptionLocations');
+        state._excLocPath = state._excLocPath.filter(x=>x!==id);
+      }
+      renderExcLocationPickerModal();
+      break;
+    }
+    case 'excLocConfirm': {
+      state.excFormDraft.locationPathIds = state._excLocPath.slice();
+      closeModal();
+      break;
+    }
+    case 'openExcLinkReportPicker': openExcLinkReportPicker(); break;
+    case 'linkExcReport': {
+      state.excFormDraft.linkedReportId = action.getAttribute('data-id');
+      closeModal();
+      break;
+    }
+    case 'unlinkExcReport': { state.excFormDraft.linkedReportId = null; render(); break; }
 
     case 'toggleFilterPanel': state._filterPanelOpen = !state._filterPanelOpen; render(); break;
     case 'clearFilters': {
@@ -2192,6 +3224,77 @@ document.addEventListener('click', async (e)=>{
     }
     case 'setReportsTab': state.reportsTab = action.getAttribute('data-tab'); render(); break;
 
+    case 'setDashPeriodType': state.dashPeriod.type = action.getAttribute('data-type'); render(); break;
+    case 'applyDashPeriodCustom': {
+      state.dashPeriod.from = document.getElementById('dashPeriodFrom').value;
+      state.dashPeriod.to = document.getElementById('dashPeriodTo').value;
+      render();
+      break;
+    }
+    case 'setMoneyPeriodType': state.moneyPeriod.type = action.getAttribute('data-type'); render(); break;
+    case 'applyMoneyPeriodCustom': {
+      state.moneyPeriod.from = document.getElementById('moneyPeriodFrom').value;
+      state.moneyPeriod.to = document.getElementById('moneyPeriodTo').value;
+      render();
+      break;
+    }
+    case 'setTimelinePeriodType': state.timelinePeriod.type = action.getAttribute('data-type'); render(); break;
+    case 'applyTimelinePeriodCustom': {
+      state.timelinePeriod.from = document.getElementById('timelinePeriodFrom').value;
+      state.timelinePeriod.to = document.getElementById('timelinePeriodTo').value;
+      render();
+      break;
+    }
+
+    /* ---- Tasks ---- */
+    case 'newTask': { state.taskFormDraft=null; go({name:'taskForm'}); break; }
+    case 'editTask': { state.taskFormDraft=null; go({name:'taskForm', editId: action.getAttribute('data-id')}); break; }
+    case 'toggleTaskDone': {
+      const id = action.getAttribute('data-id');
+      const t = byId(DB.tasks, id);
+      if(t){ t.done = !t.done; t.updatedAt = Date.now(); await saveCollection('tasks'); render(); }
+      break;
+    }
+    case 'deleteTask': {
+      const id = action.getAttribute('data-id');
+      if(confirm('למחוק את המשימה? פעולה זו בלתי הפיכה.')){
+        DB.tasks = DB.tasks.filter(x=>x.id!==id);
+        await saveCollection('tasks');
+        toast('המשימה נמחקה');
+        go({name:'tasks'});
+      }
+      break;
+    }
+    case 'taskFmt': {
+      const cmd = action.getAttribute('data-cmd');
+      const editor = document.getElementById('taskEditor');
+      if(editor) editor.focus();
+      try{ document.execCommand(cmd, false, null); }catch(err){}
+      break;
+    }
+    case 'submitTask': {
+      const editor = document.getElementById('taskEditor');
+      const draft = state.taskFormDraft;
+      const html = editor ? editor.innerHTML : (draft.contentHtml||'');
+      if(!html || !html.replace(/<[^>]+>/g,'').trim()){ toast('נא להזין תוכן למשימה'); break; }
+      const existing = draft._editId ? byId(DB.tasks, draft._editId) : null;
+      const t = {
+        id: draft._editId || uid(),
+        done: existing ? !!existing.done : false,
+        contentHtml: html,
+        order: existing ? (existing.order ?? DB.tasks.length) : DB.tasks.length,
+        createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
+        updatedAt: Date.now()
+      };
+      const idx = DB.tasks.findIndex(x=>x.id===t.id);
+      if(idx>=0) DB.tasks[idx] = t; else DB.tasks.push(t);
+      await saveCollection('tasks');
+      state.taskFormDraft = null;
+      toast(draft._editId ? 'המשימה עודכנה' : 'המשימה נשמרה');
+      go({name:'tasks'});
+      break;
+    }
+
     case 'openEntityForm': openEntityForm(action.getAttribute('data-type'), action.getAttribute('data-id')||null); break;
     case 'setEntityActive': {
       document.getElementById('modalRoot')._activeVal = action.getAttribute('data-val')==='1';
@@ -2220,7 +3323,8 @@ document.addEventListener('click', async (e)=>{
       if(swapIdx<0 || swapIdx>=list.length) break;
       const tmp = list[idx].order; list[idx].order = list[swapIdx].order; list[swapIdx].order = tmp;
       await saveCollection(type);
-      render();
+      // if this reorder happened inside one of the report-form (or exceptions) pickers, refresh that modal in place
+      refreshOpenPickerOrRender();
       break;
     }
     case 'toggleShowInactive': em.showInactive = !em.showInactive; render(); break;
@@ -2241,13 +3345,50 @@ document.addEventListener('click', async (e)=>{
 
 document.addEventListener('change', async (e)=>{
   if(e.target.id==='historySearch'){ /* handled on input below */ }
-  if(e.target.id==='photoInput'){
+  if(e.target.id==='periodDate'){ state.reportsPeriod.date = e.target.value; render(); }
+  if(e.target.id==='dashPeriodDate'){ state.dashPeriod.date = e.target.value; render(); }
+  if(e.target.id==='moneyPeriodDate'){ state.moneyPeriod.date = e.target.value; render(); }
+  if(e.target.id==='timelinePeriodDate'){ state.timelinePeriod.date = e.target.value; render(); }
+  if(e.target.id==='taskFontColor'){
+    const editor = document.getElementById('taskEditor');
+    if(editor) editor.focus();
+    try{ document.execCommand('foreColor', false, e.target.value); }catch(err){}
+  }
+  if(e.target.id==='taskBgColor'){
+    const editor = document.getElementById('taskEditor');
+    if(editor) editor.focus();
+    try{ document.execCommand('hiliteColor', false, e.target.value); }catch(err){
+      try{ document.execCommand('backColor', false, e.target.value); }catch(err2){}
+    }
+  }
+  if(e.target.id==='photoInputCamera' || e.target.id==='photoInputGallery'){
     const file = e.target.files[0];
     if(file){
       const dataUrl = await compressImage(file);
       state.formDraft.photo = dataUrl;
       render();
     }
+  }
+  if(e.target.classList && e.target.classList.contains('excPhotoInput')){
+    const stage = e.target.getAttribute('data-stage');
+    const files = Array.from(e.target.files || []);
+    for(const file of files){
+      const dataUrl = await compressImage(file);
+      if(!state.excFormDraft[stage]) state.excFormDraft[stage] = [];
+      state.excFormDraft[stage].push(dataUrl);
+    }
+    render();
+  }
+  if(e.target.classList && e.target.classList.contains('docInput')){
+    const holder = e.target.getAttribute('data-holder');
+    const files = Array.from(e.target.files || []);
+    for(const file of files){
+      if(file.size > 8*1024*1024){ toast(`הקובץ "${file.name}" גדול מדי (מעל 8MB) ולא צורף`); continue; }
+      const dataUrl = await readFileAsDataURL(file);
+      if(!state[holder].documents) state[holder].documents = [];
+      state[holder].documents.push({name:file.name, dataUrl, size:file.size, mimeType:file.type});
+    }
+    render();
   }
   if(e.target.id==='importFileInput'){
     const file = e.target.files[0];
