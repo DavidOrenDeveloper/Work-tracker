@@ -146,6 +146,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--amber);}
 input[type=number]{direction:ltr;text-align:right;}
 input[type=date]{direction:ltr;text-align:right;}
 input.hm-input{direction:ltr;text-align:right;}
+/* Fixes the classic Hebrew-RTL "typed ( shows as )" mirroring: plaintext bidi resolves each
+   line's direction from its own strong characters instead of forcing the browser's global RTL
+   mirroring rules onto neutral characters like parentheses. */
+input[type=text], input[type=search], textarea, .task-editor{ unicode-bidi: plaintext; }
 textarea{resize:vertical;min-height:64px;}
 select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -189,6 +193,12 @@ select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns=
 .docrow{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;}
 .doclink{flex:1;min-width:0;color:var(--text);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .doclink .sub{color:var(--text-faint);font-size:11px;}
+.dialog-msg{font-size:14.5px;color:var(--text-dim);line-height:1.6;}
+.dialog-input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:15px;background:var(--surface);color:var(--text);}
+.lightbox-overlay{background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:0;}
+.lightbox-img{max-width:96vw;max-height:92vh;object-fit:contain;border-radius:6px;}
+.lightbox-close{position:fixed;top:calc(14px + env(safe-area-inset-top));left:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;}
+.imgpreview .thumb, .imgpreview-row .thumb{cursor:pointer;}
 
 /* ---- Buttons ---- */
 .btn{
@@ -433,14 +443,16 @@ function compressImage(file){
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const maxW = 640;
+        // Higher resolution ceiling + quality than before — much less visible loss, still a
+        // big size reduction from a raw phone photo (typically several MB → a few hundred KB).
+        const maxW = 1600;
         const scale = Math.min(1, maxW/img.width);
         const canvas = document.createElement('canvas');
         canvas.width = img.width*scale;
         canvas.height = img.height*scale;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img,0,0,canvas.width,canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -459,8 +471,8 @@ function readFileAsDataURL(file){
 }
 
 /* ============================== STORAGE LAYER ============================== */
-const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks"];
-const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[] };
+const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks","taskCategories"];
+const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[], taskCategories:[] };
 
 /* Fully standalone, offline-capable persistence — no server, no account,
    no external APIs. Primary store is IndexedDB (large capacity, works
@@ -585,6 +597,8 @@ async function loadAll(){
 // locations on one report, so those fields become arrays: workTypeIds / locationIds / locationTexts.
 function migrateReportsSchema(){
   let changed = false;
+  let excChanged = false;
+  let taskChanged = false;
   DB.reports.forEach(r=>{
     if(!Array.isArray(r.workTypeIds)){
       r.workTypeIds = r.workTypeId ? [r.workTypeId] : [];
@@ -609,7 +623,18 @@ function migrateReportsSchema(){
     if(!r.locationQty){ r.locationQty = {}; changed = true; }
     if(!Array.isArray(r.documents)){ r.documents = []; changed = true; }
   });
+  DB.exceptions.forEach(ex=>{
+    if(!Array.isArray(ex.documents)){ ex.documents = []; excChanged = true; }
+  });
+  DB.tasks.forEach(t=>{
+    if(t.title===undefined){ t.title = ''; taskChanged = true; }
+    if(t.categoryId===undefined){ t.categoryId = ''; taskChanged = true; }
+    if(!Array.isArray(t.locationPathIds)){ t.locationPathIds = []; taskChanged = true; }
+    if(t.priority===undefined){ t.priority = null; taskChanged = true; }
+  });
   if(changed) saveCollection('reports');
+  if(excChanged) saveCollection('exceptions');
+  if(taskChanged) saveCollection('tasks');
 }
 
 function seedDefaults(){
@@ -638,7 +663,10 @@ const state = {
   formDraft: null, // used for add/edit report
   excFormDraft: null, // used for add/edit exception
   _excLocPath: [], // drill-down path while picking a nested exception location
+  _locPickerTarget: 'excFormDraft', // which draft the nested location picker is currently editing
   taskFormDraft: null, // used for add/edit task
+  taskShowPriorityColors: true,
+  taskFilterPriority: null,
   dashPeriod: { type:"week", date: todayStr(), from:"", to:"" },
   moneyPeriod: { type:"month", date: todayStr(), from:"", to:"" },
   timelinePeriod: { type:"month", date: todayStr(), from:"", to:"" },
@@ -738,7 +766,8 @@ function smartMatch(haystackRaw, queryRaw){
 
 function isEntityUsed(type, id){
   if(type==='exceptionCategories') return DB.exceptions.some(e=>e.categoryId===id);
-  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id));
+  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id)) || DB.tasks.some(t=>(t.locationPathIds||[]).includes(id));
+  if(type==='taskCategories') return DB.tasks.some(t=>t.categoryId===id);
   return DB.reports.some(r=>{
     if(type==='workers') return r.workerIds.includes(id);
     if(type==='categories') return r.categoryId===id;
@@ -1014,7 +1043,7 @@ function viewReportForm(editId, duplicateFrom){
 
         <div class="field">
           <label>תמונה (אופציונלי)</label>
-          ${draft.photo ? `<div class="imgpreview"><img class="thumb" src="${draft.photo}"><button type="button" class="rm" data-action="removePhoto">✕</button></div>`
+          ${draft.photo ? `<div class="imgpreview"><img class="thumb" src="${draft.photo}" data-action="viewImage" data-src="${draft.photo}"><button type="button" class="rm" data-action="removePhoto">✕</button></div>`
             : `<div class="row2">
                  <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">📷 צילום תמונה<input type="file" accept="image/*" capture="environment" id="photoInputCamera" style="display:none;"></label>
                  <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 בחירה מהגלריה<input type="file" accept="image/*" id="photoInputGallery" style="display:none;"></label>
@@ -1099,6 +1128,7 @@ function refreshOpenPickerOrRender(){
   else if(document.getElementById('locationModalOverlay')) renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '');
   else if(document.getElementById('excCategoryModalOverlay')) renderExcCategoryPickerModal();
   else if(document.getElementById('excLocModalOverlay')) renderExcLocationPickerModal();
+  else if(document.getElementById('taskCategoryModalOverlay')) renderTaskCategoryPickerModal();
   else render();
 }
 function clearEntityFromDraft(type, id){
@@ -1110,15 +1140,18 @@ function clearEntityFromDraft(type, id){
   }
   const excDraft = state.excFormDraft;
   if(excDraft && type==='exceptionCategories' && excDraft.categoryId===id) excDraft.categoryId = '';
+  const taskDraft = state.taskFormDraft;
+  if(taskDraft && type==='taskCategories' && taskDraft.categoryId===id) taskDraft.categoryId = '';
 }
 async function requestEntityDelete(type, id){
-  const nameGetters = { categories: categoryName, workTypes: workTypeName, locations: lid=>{ const l=byId(DB.locations,lid); return l?l.name:'?'; }, exceptionCategories: excCategoryName };
-  const label = { categories:'הקטגוריה', workTypes:'סוג העבודה', locations:'המיקום', exceptionCategories:'קטגוריית החריגה' }[type];
+  const nameGetters = { categories: categoryName, workTypes: workTypeName, locations: lid=>{ const l=byId(DB.locations,lid); return l?l.name:'?'; }, exceptionCategories: excCategoryName, taskCategories: taskCategoryName };
+  const label = { categories:'הקטגוריה', workTypes:'סוג העבודה', locations:'המיקום', exceptionCategories:'קטגוריית החריגה', taskCategories:'קטגוריית המשימה' }[type];
   const name = nameGetters[type](id);
   const item = byId(DB[type], id);
   if(!item) return;
   if(!isEntityUsed(type, id)){
-    if(confirm(`למחוק את ${label} "${name}"? פעולה זו בלתי הפיכה.`)){
+    const ok = await showConfirm(`למחוק את ${label} "${name}"? פעולה זו בלתי הפיכה.`, {danger:true, okLabel:'מחיקה'});
+    if(ok){
       DB[type] = DB[type].filter(x=>x.id!==id);
       await saveCollection(type);
       clearEntityFromDraft(type, id);
@@ -1128,19 +1161,27 @@ async function requestEntityDelete(type, id){
   }
   // In use — let the person choose: rename (keeps existing reports pointed at the same item,
   // just under a new name) or delete anyway (existing reports will show "(נמחק)" for it).
-  const wantsRename = confirm(`${label} "${name}" בשימוש בדיווחים קיימים.\n\nלחץ "אישור" כדי לשנות לה שם (הדיווחים הקיימים יתעדכנו אוטומטית),\nאו "ביטול" כדי לבחור מחיקה מלאה.`);
-  if(wantsRename){
-    const newName = prompt('שם חדש:', name);
+  const choice = await showChoice(`${label} "${name}" בשימוש`,
+    'פריט זה מופיע בדיווחים קיימים. מה תרצה לעשות?',
+    [
+      {val:'rename', label:'✏️ שינוי שם (הדיווחים הקיימים יתעדכנו)'},
+      {val:'delete', label:'🗑 מחיקה בכל זאת (בדיווחים קיימים יוצג "נמחק")', danger:true},
+    ]);
+  if(choice==='rename'){
+    const newName = await showPrompt('שם חדש', name);
     if(newName && newName.trim() && newName.trim()!==name){
       item.name = newName.trim();
       await saveCollection(type);
       toast('השם עודכן');
     }
-  } else if(confirm(`למחוק את ${label} "${name}" לצמיתות?\nבדיווחים קיימים היא תוצג בתור "(נמחק)". פעולה זו בלתי הפיכה.`)){
-    DB[type] = DB[type].filter(x=>x.id!==id);
-    await saveCollection(type);
-    clearEntityFromDraft(type, id);
-    toast('נמחק');
+  } else if(choice==='delete'){
+    const ok = await showConfirm(`למחוק את ${label} "${name}" לצמיתות?\nבדיווחים קיימים היא תוצג בתור "(נמחק)".`, {danger:true, okLabel:'מחיקה סופית'});
+    if(ok){
+      DB[type] = DB[type].filter(x=>x.id!==id);
+      await saveCollection(type);
+      clearEntityFromDraft(type, id);
+      toast('נמחק');
+    }
   }
 }
 
@@ -1541,7 +1582,7 @@ function reportCard(r){
       <div>שעות אדם: <b>${fmtHM(manHours)}</b></div>
     </div>
     ${r.notes ? `<div class="small-note" style="margin-top:6px;">📝 ${esc(r.notes)}</div>`:''}
-    ${r.photo ? `<img class="thumb" src="${r.photo}">`:''}
+    ${r.photo ? `<img class="thumb" src="${r.photo}" data-action="viewImage" data-src="${r.photo}" style="max-height:120px;">`:''}
     <div class="rcard-actions">
       <button class="iconlink" data-action="editReport" data-id="${r.id}">✎ עריכה</button>
       <button class="iconlink" data-action="duplicateReport" data-id="${r.id}">⧉ שכפול</button>
@@ -1948,7 +1989,7 @@ function excPhotoStageField(key, labelHe){
       <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">📷 צילום<input type="file" accept="image/*" capture="environment" class="excPhotoInput" data-stage="${key}" style="display:none;"></label>
       <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 גלריה<input type="file" accept="image/*" multiple class="excPhotoInput" data-stage="${key}" style="display:none;"></label>
     </div>
-    ${photos.length ? `<div class="imgpreview-row">${photos.map((p,i)=>`<div class="imgpreview"><img class="thumb" src="${p}"><button type="button" class="rm" data-action="removeExcPhoto" data-stage="${key}" data-idx="${i}">✕</button></div>`).join('')}</div>` : ''}
+    ${photos.length ? `<div class="imgpreview-row">${photos.map((p,i)=>`<div class="imgpreview"><img class="thumb" src="${p}" data-action="viewImage" data-src="${p}"><button type="button" class="rm" data-action="removeExcPhoto" data-stage="${key}" data-idx="${i}">✕</button></div>`).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -1990,7 +2031,7 @@ function viewExceptionForm(editId){
       </div>
       <div class="field">
         <label>מיקום (אופציונלי — קינון חופשי: בניין ‹ קומה ‹ חדר…)</label>
-        <button type="button" class="selectbtn ${draft.locationPathIds.length?'':'placeholder'}" data-action="openExcLocationPicker">
+        <button type="button" class="selectbtn ${draft.locationPathIds.length?'':'placeholder'}" data-action="openExcLocationPicker" data-target="excFormDraft">
           ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
         </button>
       </div>
@@ -2089,21 +2130,22 @@ function renderExcCategoryPickerModal(){
     </div>`;
   document.getElementById('modalRoot').innerHTML = html;
 }
-function openExcQuickAddCategory(){
-  const name = prompt('שם הקטגוריה החדשה (למשל: נזק, חוסר תוכניות):');
+async function openExcQuickAddCategory(){
+  const name = await showPrompt('שם הקטגוריה החדשה', '', 'למשל: נזק, חוסר תוכניות');
   if(!name || !name.trim()) return;
   const obj = {id:uid(), name:name.trim(), active:true, order:DB.exceptionCategories.length, createdAt:Date.now()};
   DB.exceptionCategories.push(obj);
-  saveCollection('exceptionCategories').then(()=>{
-    state.excFormDraft.categoryId = obj.id;
-    refreshOpenPickerOrRender();
-  });
+  await saveCollection('exceptionCategories');
+  state.excFormDraft.categoryId = obj.id;
+  toast('הקטגוריה נוספה ונבחרה');
+  render();
 }
 
 /* ---- exception hierarchical location picker (unlimited nesting, user-defined) ---- */
-function openExcLocationPicker(){
+function openExcLocationPicker(target){
   pushModalHistory();
-  state._excLocPath = (state.excFormDraft.locationPathIds||[]).slice();
+  state._locPickerTarget = target || 'excFormDraft';
+  state._excLocPath = (state[state._locPickerTarget].locationPathIds||[]).slice();
   renderExcLocationPickerModal();
 }
 function renderExcLocationPickerModal(){
@@ -2135,7 +2177,8 @@ function renderExcLocationPickerModal(){
             }).join('')}
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="excLocAdd">✚ הוספת תת-מיקום כאן</button>
-        <button class="btn btn-primary" style="margin-top:14px;" data-action="excLocConfirm">✓ אישור מיקום זה</button>
+        ${path.length ? `<button class="btn btn-primary" style="margin-top:14px;" data-action="excLocConfirm">✓ אישור מיקום: ${esc(crumbLabel)}</button>` :
+          `<button class="btn btn-outline" style="margin-top:14px;" data-action="excLocConfirm">ללא מיקום</button>`}
       </div>
     </div>`;
   document.getElementById('modalRoot').innerHTML = html;
@@ -2173,26 +2216,44 @@ function renderExcLinkReportPickerModal(search){
 }
 
 /* ============================== TASKS (משימות) MODULE ============================== */
+const PRIORITY_COLORS = {1:'#c8434c', 2:'#e0752e', 3:'#d9a812', 4:'#3f9142', 5:'#2f6fb0', 6:'#7a5aa8'};
+const taskCategoryName = id => { if(!id) return "—"; const c=byId(DB.taskCategories,id); return c? c.name : "(נמחק)"; };
 function blankTask(){
-  return { id:null, done:false, contentHtml:'' };
+  return { id:null, done:false, contentHtml:'', title:'', categoryId:'', locationPathIds:[], priority:null };
 }
 function taskRow(t){
-  return `<div class="card rcard" style="display:flex;gap:10px;align-items:flex-start;">
+  const showColors = state.taskShowPriorityColors;
+  const borderStyle = (showColors && t.priority && PRIORITY_COLORS[t.priority]) ? `border-right:4px solid ${PRIORITY_COLORS[t.priority]};` : '';
+  const locLabel = (t.locationPathIds && t.locationPathIds.length) ? excLocationPathLabel(t.locationPathIds) : '';
+  return `<div class="card rcard" style="display:flex;gap:10px;align-items:flex-start;${borderStyle}">
     <input type="checkbox" ${t.done?'checked':''} data-action="toggleTaskDone" data-id="${t.id}" style="margin-top:4px;width:20px;height:20px;flex-shrink:0;">
     <div style="flex:1;min-width:0;cursor:pointer;" data-action="editTask" data-id="${t.id}">
+      ${t.title ? `<div style="font-weight:700;margin-bottom:2px;">${esc(t.title)}</div>` : ''}
+      <div class="rcard-tags" style="margin:2px 0 4px;">
+        ${t.priority ? `<span class="tag" style="${showColors?`background:${PRIORITY_COLORS[t.priority]}22;color:${PRIORITY_COLORS[t.priority]};`:''}">🔺 דחיפות ${t.priority}</span>` : ''}
+        ${t.categoryId ? `<span class="tag">🏷 ${esc(taskCategoryName(t.categoryId))}</span>` : ''}
+        ${locLabel ? `<span class="tag">📍 ${esc(locLabel)}</span>` : ''}
+      </div>
       <div class="task-preview ${t.done?'done':''}">${t.contentHtml || '<span style="color:var(--text-faint);">(ריק)</span>'}</div>
     </div>
     <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteTask" data-id="${t.id}">🗑</button>
   </div>`;
 }
 function viewTasksList(){
-  const tasks = DB.tasks.slice().sort((a,b)=>(a.order??0)-(b.order??0));
+  const f = state.taskFilterPriority;
+  let tasks = DB.tasks.slice().sort((a,b)=>(a.order??0)-(b.order??0));
+  if(f) tasks = tasks.filter(t=>t.priority===f);
   const open = tasks.filter(t=>!t.done);
   const done = tasks.filter(t=>t.done);
   return `
     ${appbar('משימות')}
     <button class="btn btn-primary" style="margin-bottom:14px;" data-action="newTask">✚ משימה חדשה</button>
-    ${(open.length===0 && done.length===0) ? `<div class="empty"><div class="ic">📋</div>אין משימות עדיין</div>` : ''}
+    <div class="filterbar">
+      <div class="fchip ${state.taskShowPriorityColors?'active':''}" data-action="toggleTaskPriorityColors">🎨 צבעי דחיפות</div>
+      <div class="fchip ${!f?'active':''}" data-action="setTaskPriorityFilter" data-priority="">הכל</div>
+      ${[1,2,3,4,5,6].map(p=>`<div class="fchip ${f===p?'active':''}" data-action="setTaskPriorityFilter" data-priority="${p}" style="${(!f||f===p)?`border-color:${PRIORITY_COLORS[p]};`:''}">${p}</div>`).join('')}
+    </div>
+    ${(open.length===0 && done.length===0) ? `<div class="empty"><div class="ic">📋</div>אין משימות${f?' בדחיפות זו':' עדיין'}</div>` : ''}
     ${open.length ? `<div class="section-title">פתוחות (${open.length})</div>${open.map(taskRow).join('')}` : ''}
     ${done.length ? `<div class="section-title" style="margin-top:18px;">הושלמו (${done.length})</div>${done.map(taskRow).join('')}` : ''}
   `;
@@ -2211,23 +2272,55 @@ function viewTaskForm(editId){
     draft = (state.taskFormDraft && !state.taskFormDraft._editId) ? state.taskFormDraft : blankTask();
   }
   state.taskFormDraft = draft;
+  const locLabel = excLocationPathLabel(draft.locationPathIds);
 
   return `
     ${appbar(editId ? 'עריכת משימה' : 'משימה חדשה')}
     <div class="card">
-      <div class="rte-toolbar">
-        <button type="button" data-action="taskFmt" data-cmd="undo" title="בטל פעולה">↩</button>
-        <button type="button" data-action="taskFmt" data-cmd="bold" title="מודגש"><b>B</b></button>
-        <button type="button" data-action="taskFmt" data-cmd="italic" title="נטוי"><i>I</i></button>
-        <button type="button" data-action="taskFmt" data-cmd="insertUnorderedList" title="רשימת תבליטים">•≡</button>
-        <button type="button" data-action="taskFmt" data-cmd="insertOrderedList" title="רשימה ממוספרת">1≡</button>
-        <button type="button" data-action="taskFmt" data-cmd="justifyRight" title="יישור לימין">→≡</button>
-        <button type="button" data-action="taskFmt" data-cmd="justifyCenter" title="מרכוז">≡</button>
-        <button type="button" data-action="taskFmt" data-cmd="justifyLeft" title="יישור לשמאל">≡←</button>
-        <label class="rte-color" title="צבע טקסט">A<input type="color" id="taskFontColor" value="#1a1a1a"></label>
-        <label class="rte-color" title="צבע הדגשה">🖍<input type="color" id="taskBgColor" value="#fff59d"></label>
+      <div class="field">
+        <label>כותרת (אופציונלי)</label>
+        <input type="text" id="taskTitleInput" placeholder="לדוגמה: להזמין חומרי גלם" value="${esc(draft.title)}">
       </div>
-      <div id="taskEditor" class="task-editor" contenteditable="true" dir="auto">${draft.contentHtml || ''}</div>
+
+      <div class="field">
+        <div class="field-label-row"><label>קטגוריה (אופציונלי)</label><button type="button" class="addlink" data-action="openTaskQuickAddCategory">✚ חדשה</button></div>
+        <button type="button" class="selectbtn ${draft.categoryId?'':'placeholder'}" data-action="openTaskCategoryPicker">
+          ${draft.categoryId ? esc(taskCategoryName(draft.categoryId)) : 'בחר קטגוריה…'}
+        </button>
+      </div>
+
+      <div class="field">
+        <label>שיוך למיקום (בניין / משרד / שטח — אופציונלי)</label>
+        <button type="button" class="selectbtn ${draft.locationPathIds.length?'':'placeholder'}" data-action="openExcLocationPicker" data-target="taskFormDraft">
+          ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
+        </button>
+      </div>
+
+      <div class="field">
+        <label>רמת דחיפות (אופציונלי, 1 = הכי דחוף)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn ${!draft.priority?'btn-primary':'btn-outline'} btn-sm" data-action="setTaskFormPriority" data-priority="">ללא</button>
+          ${[1,2,3,4,5,6].map(p=>`<button type="button" class="btn btn-sm ${draft.priority===p?'':'btn-outline'}" data-action="setTaskFormPriority" data-priority="${p}" style="${draft.priority===p?`background:${PRIORITY_COLORS[p]};border-color:${PRIORITY_COLORS[p]};color:#fff;`:''}">${p}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>תוכן המשימה</label>
+        <div class="rte-toolbar">
+          <button type="button" data-action="taskFmt" data-cmd="undo" title="בטל פעולה">↩</button>
+          <button type="button" data-action="taskFmt" data-cmd="bold" title="מודגש"><b>B</b></button>
+          <button type="button" data-action="taskFmt" data-cmd="italic" title="נטוי"><i>I</i></button>
+          <button type="button" data-action="taskFmt" data-cmd="insertUnorderedList" title="רשימת תבליטים">•≡</button>
+          <button type="button" data-action="taskFmt" data-cmd="insertOrderedList" title="רשימה ממוספרת">1≡</button>
+          <button type="button" data-action="taskFmt" data-cmd="justifyRight" title="יישור לימין">→≡</button>
+          <button type="button" data-action="taskFmt" data-cmd="justifyCenter" title="מרכוז">≡</button>
+          <button type="button" data-action="taskFmt" data-cmd="justifyLeft" title="יישור לשמאל">≡←</button>
+          <label class="rte-color" title="צבע טקסט">A<input type="color" id="taskFontColor" value="#1a1a1a"></label>
+          <label class="rte-color" title="צבע הדגשה">🖍<input type="color" id="taskBgColor" value="#fff59d"></label>
+        </div>
+        <div id="taskEditor" class="task-editor" contenteditable="true" dir="auto">${draft.contentHtml || ''}</div>
+      </div>
+
       <div class="btnrow" style="margin-top:14px;">
         <button type="button" class="btn btn-outline" data-nav="tasks">ביטול</button>
         <button type="button" class="btn btn-primary" data-action="submitTask">${editId?'שמור שינויים':'שמור משימה'}</button>
@@ -2235,6 +2328,50 @@ function viewTaskForm(editId){
       ${editId ? `<button type="button" class="btn btn-danger" style="margin-top:10px;width:100%;" data-action="deleteTask" data-id="${editId}">מחיקת משימה</button>` : ''}
     </div>
   `;
+}
+
+/* ---- task category picker (single-select, with delete/rename) ---- */
+function openTaskCategoryPicker(){ pushModalHistory(); renderTaskCategoryPickerModal(); }
+function renderTaskCategoryPickerModal(){
+  const draft = state.taskFormDraft;
+  const cats = activeOf(DB.taskCategories);
+  const html = `
+    <div class="overlay" id="taskCategoryModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>קטגוריית משימה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div id="taskCategoryListWrap">
+          <div class="msel-row ${!draft.categoryId?'checked':''}" data-action="selectTaskCategory" data-id="">
+            <div class="msel-check">${!draft.categoryId?'✓':''}</div><div class="lbl">— ללא קטגוריה —</div>
+          </div>
+          ${cats.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין קטגוריות עדיין</div>` :
+            cats.map(c=>{
+              const checked = draft.categoryId===c.id;
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="selectTaskCategory" data-id="${c.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="selectTaskCategory" data-id="${c.id}" style="cursor:pointer;flex:1;">${esc(c.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="taskCategories" data-id="${c.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="taskCategories" data-id="${c.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteTaskCategoryFromPicker" data-id="${c.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openTaskQuickAddCategory">✚ קטגוריה חדשה</button>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">סגור</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+async function openTaskQuickAddCategory(){
+  const name = await showPrompt('שם הקטגוריה החדשה', '', 'למשל: תחזוקה, רכש, בטיחות');
+  if(!name || !name.trim()) return;
+  const obj = {id:uid(), name:name.trim(), active:true, order:DB.taskCategories.length, createdAt:Date.now()};
+  DB.taskCategories.push(obj);
+  await saveCollection('taskCategories');
+  state.taskFormDraft.categoryId = obj.id;
+  toast('הקטגוריה נוספה ונבחרה');
+  render();
 }
 
 /* ============================== MONEY / COST TRACKING ============================== */
@@ -2722,7 +2859,7 @@ async function importBackupFile(file){
     const text = await file.text();
     const parsed = JSON.parse(text);
     const data = parsed.data || parsed;
-    if(!confirm('שחזור גיבוי יחליף את כל הנתונים הקיימים במערכת. להמשיך?')) return;
+    if(!(await showConfirm('שחזור גיבוי יחליף את כל הנתונים הקיימים במערכת. להמשיך?', {danger:true, okLabel:'שחזור'}))) return;
     for(const c of COLLECTIONS){ if(Array.isArray(data[c])) DB[c] = data[c]; }
     migrateReportsSchema();
     await saveAllCollections();
@@ -2733,8 +2870,8 @@ async function importBackupFile(file){
   }
 }
 async function hardReset(){
-  if(!confirm('פעולה זו תמחק את כל הנתונים במערכת לצמיתות. להמשיך?')) return;
-  if(!confirm('אישור אחרון: למחוק את כל הנתונים?')) return;
+  if(!(await showConfirm('פעולה זו תמחק את כל הנתונים במערכת לצמיתות. להמשיך?', {danger:true, okLabel:'המשך'}))) return;
+  if(!(await showConfirm('אישור אחרון: למחוק את כל הנתונים?', {danger:true, okLabel:'מחיקה סופית'}))) return;
   for(const c of COLLECTIONS) DB[c] = [];
   seedDefaults();
   await saveAllCollections();
@@ -2750,6 +2887,81 @@ function closeModal(){
     document.getElementById('modalRoot').innerHTML = '';
     render();
   }
+}
+
+/* ---- Custom confirm/prompt/choice dialogs — replace ugly native browser confirm()/prompt()
+   ("The site says...") with in-app modals matching the rest of the design. Async, resolved
+   by the button the person taps. ---- */
+function showConfirm(message, opts={}){
+  return new Promise(resolve=>{
+    pushModalHistory();
+    state._dialogResolve = resolve;
+    const title = opts.title || 'אישור פעולה';
+    const okLabel = opts.okLabel || 'אישור';
+    const cancelLabel = opts.cancelLabel || 'ביטול';
+    const okClass = opts.danger ? 'btn-danger' : 'btn-primary';
+    const html = `<div class="overlay" id="dialogOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>${esc(title)}</h3></div>
+        <div class="dialog-msg">${esc(message).replace(/\n/g,'<br>')}</div>
+        <div class="btnrow" style="margin-top:16px;">
+          <button type="button" class="btn btn-outline" data-action="dialogResolve" data-val="cancel">${esc(cancelLabel)}</button>
+          <button type="button" class="btn ${okClass}" data-action="dialogResolve" data-val="ok">${esc(okLabel)}</button>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById('modalRoot').innerHTML = html;
+  });
+}
+function showChoice(title, message, choices){
+  // choices: [{val, label, danger?}] — resolves with the chosen val, or null if dismissed/cancelled
+  return new Promise(resolve=>{
+    pushModalHistory();
+    state._dialogResolve = resolve;
+    const html = `<div class="overlay" id="dialogOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>${esc(title)}</h3></div>
+        ${message ? `<div class="dialog-msg">${esc(message).replace(/\n/g,'<br>')}</div>` : ''}
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+          ${choices.map(c=>`<button type="button" class="btn ${c.danger?'btn-danger':'btn-outline'}" data-action="dialogChoiceResolve" data-val="${esc(c.val)}">${esc(c.label)}</button>`).join('')}
+          <button type="button" class="btn btn-outline" data-action="dialogChoiceResolve" data-val="">ביטול</button>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById('modalRoot').innerHTML = html;
+  });
+}
+function showPrompt(title, defaultValue, placeholder){
+  return new Promise(resolve=>{
+    pushModalHistory();
+    state._dialogResolve = resolve;
+    const html = `<div class="overlay" id="dialogOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>${esc(title)}</h3></div>
+        <input type="text" id="dialogPromptInput" class="dialog-input" value="${esc(defaultValue||'')}" placeholder="${esc(placeholder||'')}">
+        <div class="btnrow" style="margin-top:16px;">
+          <button type="button" class="btn btn-outline" data-action="dialogPromptResolve" data-val="cancel">ביטול</button>
+          <button type="button" class="btn btn-primary" data-action="dialogPromptResolve" data-val="ok">אישור</button>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById('modalRoot').innerHTML = html;
+    const input = document.getElementById('dialogPromptInput');
+    setTimeout(()=>{ if(input){ input.focus(); input.select(); } }, 60);
+    if(input) input.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); document.querySelector('[data-action="dialogPromptResolve"][data-val="ok"]').click(); }
+    });
+  });
+}
+
+/* ---- Full-screen image viewer (lightbox) ---- */
+function openImageViewer(src){
+  pushModalHistory();
+  const html = `<div class="overlay lightbox-overlay" id="lightboxOverlay" data-action="closeModal">
+    <img src="${src}" class="lightbox-img" data-action="noop">
+    <button type="button" class="lightbox-close" data-action="closeModal">✕</button>
+  </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
 }
 
 /* ============================== EVENT HANDLING ============================== */
@@ -2904,6 +3116,34 @@ document.addEventListener('click', async (e)=>{
     case 'doExport': doExport(); break;
     case 'doExportPdf': doExportPdf(); break;
     case 'closeModal': closeModal(); break;
+    case 'noop': break;
+    case 'dialogResolve': {
+      const val = action.getAttribute('data-val')==='ok';
+      const resolve = state._dialogResolve;
+      state._dialogResolve = null;
+      closeModal();
+      if(resolve) resolve(val);
+      break;
+    }
+    case 'dialogChoiceResolve': {
+      const val = action.getAttribute('data-val');
+      const resolve = state._dialogResolve;
+      state._dialogResolve = null;
+      closeModal();
+      if(resolve) resolve(val || null);
+      break;
+    }
+    case 'dialogPromptResolve': {
+      const val = action.getAttribute('data-val');
+      const resolve = state._dialogResolve;
+      state._dialogResolve = null;
+      const input = document.getElementById('dialogPromptInput');
+      const text = input ? input.value : '';
+      closeModal();
+      if(resolve) resolve(val==='ok' ? text : null);
+      break;
+    }
+    case 'viewImage': openImageViewer(action.getAttribute('data-src')); break;
 
     case 'goBack': goBack(); break;
     case 'openQuickAdd': openQuickAdd(action.getAttribute('data-kind')); break;
@@ -2982,7 +3222,7 @@ document.addEventListener('click', async (e)=>{
     case 'deleteCategoryFromPicker': {
       const id = action.getAttribute('data-id');
       await requestEntityDelete('categories', id);
-      refreshOpenPickerOrRender();
+      renderCategoryPickerModal();
       break;
     }
 
@@ -3025,7 +3265,7 @@ document.addEventListener('click', async (e)=>{
     case 'deleteWorkTypeFromPicker': {
       const id = action.getAttribute('data-id');
       await requestEntityDelete('workTypes', id);
-      refreshOpenPickerOrRender();
+      renderWorkTypePickerModal('');
       break;
     }
 
@@ -3078,7 +3318,7 @@ document.addEventListener('click', async (e)=>{
     case 'deleteLocationFromPicker': {
       const id = action.getAttribute('data-id');
       await requestEntityDelete('locations', id);
-      refreshOpenPickerOrRender();
+      renderLocationPickerModal('');
       break;
     }
     case 'removeLocationTextChip': {
@@ -3095,7 +3335,7 @@ document.addEventListener('click', async (e)=>{
     case 'duplicateReport': { state.formDraft=null; go({name:'addReport', duplicateFrom: action.getAttribute('data-id')}); break; }
     case 'deleteReport': {
       const id = action.getAttribute('data-id');
-      if(confirm('למחוק את הדיווח? פעולה זו בלתי הפיכה.')){
+      if(await showConfirm('למחוק את הדיווח? פעולה זו בלתי הפיכה.', {danger:true, okLabel:'מחיקה'})){
         DB.reports = DB.reports.filter(r=>r.id!==id);
         await saveCollection('reports');
         toast('הדיווח נמחק');
@@ -3109,7 +3349,7 @@ document.addEventListener('click', async (e)=>{
     case 'editException': { state.excFormDraft=null; go({name:'exceptionForm', editId: action.getAttribute('data-id')}); break; }
     case 'deleteException': {
       const id = action.getAttribute('data-id');
-      if(confirm('למחוק את החריגה? פעולה זו בלתי הפיכה.')){
+      if(await showConfirm('למחוק את החריגה? פעולה זו בלתי הפיכה.', {danger:true, okLabel:'מחיקה'})){
         DB.exceptions = DB.exceptions.filter(e=>e.id!==id);
         await saveCollection('exceptions');
         toast('החריגה נמחקה');
@@ -3135,15 +3375,15 @@ document.addEventListener('click', async (e)=>{
     case 'deleteExcCategoryFromPicker': {
       const id = action.getAttribute('data-id');
       await requestEntityDelete('exceptionCategories', id);
-      refreshOpenPickerOrRender();
+      renderExcCategoryPickerModal();
       break;
     }
-    case 'openExcLocationPicker': openExcLocationPicker(); break;
+    case 'openExcLocationPicker': openExcLocationPicker(action.getAttribute('data-target')||'excFormDraft'); break;
     case 'excLocDrill': { state._excLocPath.push(action.getAttribute('data-id')); renderExcLocationPickerModal(); break; }
     case 'excLocUp': { state._excLocPath.pop(); renderExcLocationPickerModal(); break; }
     case 'excLocRoot': { state._excLocPath = []; renderExcLocationPickerModal(); break; }
     case 'excLocAdd': {
-      const name = prompt('שם תת-המיקום (למשל: קומה 1, חדר משרדי הנהלה):');
+      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1, חדר משרדי הנהלה');
       if(name && name.trim()){
         const parentId = state._excLocPath.length ? state._excLocPath[state._excLocPath.length-1] : null;
         const siblingCount = DB.exceptionLocations.filter(x=>x.parentId===parentId).length;
@@ -3159,7 +3399,7 @@ document.addEventListener('click', async (e)=>{
       if(hasKids){ toast('לא ניתן למחוק מיקום שיש לו תתי-מיקום — מחק קודם אותם'); break; }
       const used = isEntityUsed('exceptionLocations', id);
       const msg = used ? 'המיקום בשימוש בחריגים קיימים. למחוק בכל זאת? (בחריגים קיימים יוצג "נמחק")' : 'למחוק את תת-המיקום?';
-      if(confirm(msg)){
+      if(await showConfirm(msg, {danger:true, okLabel:'מחיקה'})){
         DB.exceptionLocations = DB.exceptionLocations.filter(x=>x.id!==id);
         await saveCollection('exceptionLocations');
         state._excLocPath = state._excLocPath.filter(x=>x!==id);
@@ -3168,7 +3408,8 @@ document.addEventListener('click', async (e)=>{
       break;
     }
     case 'excLocConfirm': {
-      state.excFormDraft.locationPathIds = state._excLocPath.slice();
+      const target = state._locPickerTarget || 'excFormDraft';
+      state[target].locationPathIds = state._excLocPath.slice();
       closeModal();
       break;
     }
@@ -3257,7 +3498,7 @@ document.addEventListener('click', async (e)=>{
     }
     case 'deleteTask': {
       const id = action.getAttribute('data-id');
-      if(confirm('למחוק את המשימה? פעולה זו בלתי הפיכה.')){
+      if(await showConfirm('למחוק את המשימה? פעולה זו בלתי הפיכה.', {danger:true, okLabel:'מחיקה'})){
         DB.tasks = DB.tasks.filter(x=>x.id!==id);
         await saveCollection('tasks');
         toast('המשימה נמחקה');
@@ -3272,16 +3513,48 @@ document.addEventListener('click', async (e)=>{
       try{ document.execCommand(cmd, false, null); }catch(err){}
       break;
     }
+    case 'openTaskCategoryPicker': openTaskCategoryPicker(); break;
+    case 'openTaskQuickAddCategory': openTaskQuickAddCategory(); break;
+    case 'selectTaskCategory': {
+      state.taskFormDraft.categoryId = action.getAttribute('data-id');
+      closeModal();
+      break;
+    }
+    case 'deleteTaskCategoryFromPicker': {
+      const id = action.getAttribute('data-id');
+      await requestEntityDelete('taskCategories', id);
+      renderTaskCategoryPickerModal();
+      break;
+    }
+    case 'setTaskFormPriority': {
+      const p = action.getAttribute('data-priority');
+      state.taskFormDraft.priority = p ? parseInt(p,10) : null;
+      render();
+      break;
+    }
+    case 'toggleTaskPriorityColors': state.taskShowPriorityColors = !state.taskShowPriorityColors; render(); break;
+    case 'setTaskPriorityFilter': {
+      const p = action.getAttribute('data-priority');
+      state.taskFilterPriority = p ? parseInt(p,10) : null;
+      render();
+      break;
+    }
     case 'submitTask': {
       const editor = document.getElementById('taskEditor');
       const draft = state.taskFormDraft;
       const html = editor ? editor.innerHTML : (draft.contentHtml||'');
+      const titleInput = document.getElementById('taskTitleInput');
+      if(titleInput) draft.title = titleInput.value;
       if(!html || !html.replace(/<[^>]+>/g,'').trim()){ toast('נא להזין תוכן למשימה'); break; }
       const existing = draft._editId ? byId(DB.tasks, draft._editId) : null;
       const t = {
         id: draft._editId || uid(),
         done: existing ? !!existing.done : false,
         contentHtml: html,
+        title: draft.title||'',
+        categoryId: draft.categoryId||'',
+        locationPathIds: (draft.locationPathIds||[]).slice(),
+        priority: draft.priority || null,
         order: existing ? (existing.order ?? DB.tasks.length) : DB.tasks.length,
         createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
         updatedAt: Date.now()
@@ -3308,7 +3581,7 @@ document.addEventListener('click', async (e)=>{
     case 'hardDeleteEntity': {
       const type = action.getAttribute('data-type'); const id = action.getAttribute('data-id');
       if(isEntityUsed(type,id)){ toast('לא ניתן למחוק פריט בשימוש'); return; }
-      if(confirm('למחוק פריט זה לצמיתות?')){
+      if(await showConfirm('למחוק פריט זה לצמיתות?', {danger:true, okLabel:'מחיקה'})){
         DB[type] = DB[type].filter(x=>x.id!==id);
         await saveCollection(type);
         closeModal(); toast('נמחק לצמיתות');
@@ -3441,6 +3714,9 @@ document.addEventListener('input', (e)=>{
   if(e.target.hasAttribute('data-location-qty')){
     state.formDraft.locationQty[e.target.getAttribute('data-location-qty')] = e.target.value;
     updateSplitSum('location');
+  }
+  if(e.target.id==='taskTitleInput' && state.taskFormDraft){
+    state.taskFormDraft.title = e.target.value;
   }
 });
 
