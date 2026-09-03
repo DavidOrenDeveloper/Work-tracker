@@ -2022,12 +2022,14 @@ function viewExceptionForm(editId){
       <div class="field">
         <label>כותרת / תיאור החריגה *</label>
         <textarea name="title" placeholder="לדוגמה: נזק לצנרת בקומה 1, עבודה ללא תוכניות מאושרות…" required>${esc(draft.title)}</textarea>
+        <div class="hint">תיאור חופשי של המקרה הספציפי הזה — מה בדיוק קרה.</div>
       </div>
       <div class="field">
         <div class="field-label-row"><label>קטגוריית חריגה (אופציונלי)</label><button type="button" class="addlink" data-action="openExcQuickAddCategory">✚ חדשה</button></div>
         <button type="button" class="selectbtn ${draft.categoryId?'':'placeholder'}" data-action="openExcCategoryPicker">
           ${draft.categoryId ? esc(excCategoryName(draft.categoryId)) : 'בחר קטגוריה… (נזק, חוסר תוכניות וכו׳)'}
         </button>
+        <div class="hint">סיווג כללי וחוזר לפי סוג — משמש לסינון ולסיכומי עלות לפי קטגוריה בדוחות (למשל: כל ה"נזקים" ביחד).</div>
       </div>
       <div class="field">
         <label>מיקום (אופציונלי — קינון חופשי: בניין ‹ קומה ‹ חדר…)</label>
@@ -2894,7 +2896,9 @@ function closeModal(){
    by the button the person taps. ---- */
 function showConfirm(message, opts={}){
   return new Promise(resolve=>{
-    pushModalHistory();
+    // Deliberately does NOT use pushModalHistory()/closeModal() — those rely on the browser's
+    // async popstate event, which can fire *after* our own code has already re-drawn the
+    // picker underneath, wiping it out again. These quick dialogs close synchronously instead.
     state._dialogResolve = resolve;
     const title = opts.title || 'אישור פעולה';
     const okLabel = opts.okLabel || 'אישור';
@@ -2916,7 +2920,6 @@ function showConfirm(message, opts={}){
 function showChoice(title, message, choices){
   // choices: [{val, label, danger?}] — resolves with the chosen val, or null if dismissed/cancelled
   return new Promise(resolve=>{
-    pushModalHistory();
     state._dialogResolve = resolve;
     const html = `<div class="overlay" id="dialogOverlay">
       <div class="sheet">
@@ -2933,7 +2936,6 @@ function showChoice(title, message, choices){
 }
 function showPrompt(title, defaultValue, placeholder){
   return new Promise(resolve=>{
-    pushModalHistory();
     state._dialogResolve = resolve;
     const html = `<div class="overlay" id="dialogOverlay">
       <div class="sheet">
@@ -3121,7 +3123,7 @@ document.addEventListener('click', async (e)=>{
       const val = action.getAttribute('data-val')==='ok';
       const resolve = state._dialogResolve;
       state._dialogResolve = null;
-      closeModal();
+      document.getElementById('modalRoot').innerHTML = '';
       if(resolve) resolve(val);
       break;
     }
@@ -3129,7 +3131,7 @@ document.addEventListener('click', async (e)=>{
       const val = action.getAttribute('data-val');
       const resolve = state._dialogResolve;
       state._dialogResolve = null;
-      closeModal();
+      document.getElementById('modalRoot').innerHTML = '';
       if(resolve) resolve(val || null);
       break;
     }
@@ -3139,7 +3141,7 @@ document.addEventListener('click', async (e)=>{
       state._dialogResolve = null;
       const input = document.getElementById('dialogPromptInput');
       const text = input ? input.value : '';
-      closeModal();
+      document.getElementById('modalRoot').innerHTML = '';
       if(resolve) resolve(val==='ok' ? text : null);
       break;
     }
@@ -3697,6 +3699,14 @@ document.addEventListener('input', (e)=>{
         totalEl.textContent = fmtHM(h * draft.workerIds.length);
       }
     }
+  }
+  // same live-sync for the exception form — without this, opening/closing any picker (category,
+  // location, link-to-report...) re-renders the form and wipes anything typed but not yet saved
+  // into the draft (this was the bug where the title/description field kept getting erased).
+  if(e.target.closest('#exceptionForm')){
+    const draft = state.excFormDraft;
+    const name = e.target.name;
+    if(name) draft[name] = e.target.value;
   }
   // manual hour/quantity-split inputs inside the work type / location picker modals
   if(e.target.hasAttribute('data-worktype-hours')){
