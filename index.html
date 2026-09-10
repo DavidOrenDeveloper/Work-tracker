@@ -315,6 +315,16 @@ table.rtable tr:last-child td{border-bottom:none;}
 a{color:var(--amber);}
 .reorder-btns{display:flex;flex-direction:column;gap:2px;}
 .reorder-btns button{background:var(--surface-3);border:1px solid var(--border);color:var(--text-dim);width:24px;height:22px;border-radius:5px;font-size:11px;cursor:pointer;line-height:1;}
+/* ---- damage photo caption + generic dynamic list rows (נזקים / updates) ---- */
+.dmgphoto{display:flex;flex-direction:column;gap:4px;width:84px;}
+.dmgphoto input{font-size:10.5px;padding:5px 6px;border-radius:6px;width:100%;}
+.dmg-loctag{display:flex;align-items:center;gap:6px;background:var(--surface-3);border:1px solid var(--border);border-radius:10px;padding:7px 10px;margin-bottom:6px;font-size:13px;}
+.dmg-loctag .x{cursor:pointer;color:var(--red);font-weight:800;margin-inline-start:auto;}
+.dmg-update-row{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;}
+.dmg-update-row .row2{margin-bottom:8px;}
+.dmg-hist-row{display:flex;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border-soft);font-size:12.5px;}
+.dmg-hist-row:last-child{border-bottom:none;}
+.dmg-hist-date{color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -471,8 +481,8 @@ function readFileAsDataURL(file){
 }
 
 /* ============================== STORAGE LAYER ============================== */
-const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks","taskCategories"];
-const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[], taskCategories:[] };
+const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks","taskCategories","damageCategories","damages"];
+const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[], taskCategories:[], damageCategories:[], damages:[] };
 
 /* Fully standalone, offline-capable persistence — no server, no account,
    no external APIs. Primary store is IndexedDB (large capacity, works
@@ -589,7 +599,17 @@ async function loadAll(){
     // Never block the first paint on this — save in the background regardless of outcome.
     saveAllCollections().finally(render);
   }
+  if(DB.damageCategories.length===0){
+    seedDamageCategoriesIfEmpty();
+    saveCollection('damageCategories');
+  }
   migrateReportsSchema();
+}
+// One-time seed of default damage types — independent of seedDefaults() above so it also
+// applies to installs that already have other data (the נזקים feature was added later).
+function seedDamageCategoriesIfEmpty(){
+  const names = ["צינור","כבל","תעלה","לוח","ציוד","עבודה שבוצעה","אחר"];
+  DB.damageCategories = names.map((name,i)=>({id:uid(), name, active:true, order:i, createdAt:Date.now()}));
 }
 
 // One-time-per-load normalization: older reports stored a single workTypeId / locationId
@@ -632,9 +652,18 @@ function migrateReportsSchema(){
     if(!Array.isArray(t.locationPathIds)){ t.locationPathIds = []; taskChanged = true; }
     if(t.priority===undefined){ t.priority = null; taskChanged = true; }
   });
+  let dmgChanged = false;
+  DB.damages.forEach(d=>{
+    if(!Array.isArray(d.locationPaths)){ d.locationPaths = []; dmgChanged = true; }
+    if(!Array.isArray(d.photos)){ d.photos = []; dmgChanged = true; }
+    if(!Array.isArray(d.documents)){ d.documents = []; dmgChanged = true; }
+    if(!Array.isArray(d.updates)){ d.updates = []; dmgChanged = true; }
+    if(!Array.isArray(d.history)){ d.history = [{at:d.createdAt||Date.now(), type:'created', text:'הנזק נוצר ותועד'}]; dmgChanged = true; }
+  });
   if(changed) saveCollection('reports');
   if(excChanged) saveCollection('exceptions');
   if(taskChanged) saveCollection('tasks');
+  if(dmgChanged) saveCollection('damages');
 }
 
 function seedDefaults(){
@@ -667,6 +696,10 @@ const state = {
   taskFormDraft: null, // used for add/edit task
   taskShowPriorityColors: true,
   taskFilterPriority: null,
+  dmgFormDraft: null, // used for add/edit damage (נזק)
+  _dmgLocPath: [], // drill-down path while picking a nested damage location (shares the exceptionLocations tree)
+  _dmgLinkField: null, // which report-link field ('priorReportId'/'originalReportId'/'repairReportId') the picker is currently editing
+  dmgFilters: { search:'', categoryId:'', status:'', causedBy:'' },
   dashPeriod: { type:"week", date: todayStr(), from:"", to:"" },
   moneyPeriod: { type:"month", date: todayStr(), from:"", to:"" },
   timelinePeriod: { type:"month", date: todayStr(), from:"", to:"" },
@@ -766,8 +799,9 @@ function smartMatch(haystackRaw, queryRaw){
 
 function isEntityUsed(type, id){
   if(type==='exceptionCategories') return DB.exceptions.some(e=>e.categoryId===id);
-  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id)) || DB.tasks.some(t=>(t.locationPathIds||[]).includes(id));
+  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id)) || DB.tasks.some(t=>(t.locationPathIds||[]).includes(id)) || DB.damages.some(d=>(d.locationPaths||[]).some(p=>p.includes(id)));
   if(type==='taskCategories') return DB.tasks.some(t=>t.categoryId===id);
+  if(type==='damageCategories') return DB.damages.some(d=>d.categoryId===id);
   return DB.reports.some(r=>{
     if(type==='workers') return r.workerIds.includes(id);
     if(type==='categories') return r.categoryId===id;
@@ -789,6 +823,8 @@ function render(){
   else if(r.name==='reports') html = viewReports();
   else if(r.name==='exceptions') html = viewExceptionsList();
   else if(r.name==='exceptionForm') html = viewExceptionForm(r.editId||null);
+  else if(r.name==='damages') html = viewDamagesList();
+  else if(r.name==='damageForm') html = viewDamageForm(r.editId||null);
   else if(r.name==='tasks') html = viewTasksList();
   else if(r.name==='taskForm') html = viewTaskForm(r.editId||null);
   else if(r.name==='moneyClaim') html = viewMoneyClaim();
@@ -843,6 +879,7 @@ function bottomNav(){
     {name:'addReport', ic:'✚', lb:'דיווח'},
     {name:'history', ic:'☰', lb:'היסטוריה'},
     {name:'exceptions', ic:'⚠', lb:'חריגים'},
+    {name:'damages', ic:'🧱', lb:'נזקים'},
     {name:'tasks', ic:'☑', lb:'משימות'},
     {name:'reports', ic:'▤', lb:'דוחות'},
   ];
@@ -916,6 +953,7 @@ function viewHome(){
       <div class="tile primary" data-nav="addReport"><span class="ic">✚</span><span class="lb">הוסף דיווח</span></div>
       <div class="tile" data-nav="history"><span class="ic">☰</span><span class="lb">היסטוריה</span></div>
       <div class="tile" data-nav="exceptions"><span class="ic">⚠</span><span class="lb">חריגים</span></div>
+      <div class="tile" data-nav="damages"><span class="ic">🧱</span><span class="lb">נזקים</span></div>
       <div class="tile" data-nav="tasks"><span class="ic">☑</span><span class="lb">משימות</span></div>
       <div class="tile" data-nav="moneyClaim"><span class="ic">💰</span><span class="lb">כסף לתביעה</span></div>
       <div class="tile" data-nav="timeline"><span class="ic">🕓</span><span class="lb">ציר זמן</span></div>
@@ -1129,6 +1167,8 @@ function refreshOpenPickerOrRender(){
   else if(document.getElementById('excCategoryModalOverlay')) renderExcCategoryPickerModal();
   else if(document.getElementById('excLocModalOverlay')) renderExcLocationPickerModal();
   else if(document.getElementById('taskCategoryModalOverlay')) renderTaskCategoryPickerModal();
+  else if(document.getElementById('dmgCategoryModalOverlay')) renderDmgCategoryPickerModal();
+  else if(document.getElementById('dmgLocModalOverlay')) renderDmgLocationPickerModal();
   else render();
 }
 function clearEntityFromDraft(type, id){
@@ -1142,10 +1182,12 @@ function clearEntityFromDraft(type, id){
   if(excDraft && type==='exceptionCategories' && excDraft.categoryId===id) excDraft.categoryId = '';
   const taskDraft = state.taskFormDraft;
   if(taskDraft && type==='taskCategories' && taskDraft.categoryId===id) taskDraft.categoryId = '';
+  const dmgDraft = state.dmgFormDraft;
+  if(dmgDraft && type==='damageCategories' && dmgDraft.categoryId===id) dmgDraft.categoryId = '';
 }
 async function requestEntityDelete(type, id){
-  const nameGetters = { categories: categoryName, workTypes: workTypeName, locations: lid=>{ const l=byId(DB.locations,lid); return l?l.name:'?'; }, exceptionCategories: excCategoryName, taskCategories: taskCategoryName };
-  const label = { categories:'הקטגוריה', workTypes:'סוג העבודה', locations:'המיקום', exceptionCategories:'קטגוריית החריגה', taskCategories:'קטגוריית המשימה' }[type];
+  const nameGetters = { categories: categoryName, workTypes: workTypeName, locations: lid=>{ const l=byId(DB.locations,lid); return l?l.name:'?'; }, exceptionCategories: excCategoryName, taskCategories: taskCategoryName, damageCategories: dmgCategoryName };
+  const label = { categories:'הקטגוריה', workTypes:'סוג העבודה', locations:'המיקום', exceptionCategories:'קטגוריית החריגה', taskCategories:'קטגוריית המשימה', damageCategories:'סוג הנזק' }[type];
   const name = nameGetters[type](id);
   const item = byId(DB[type], id);
   if(!item) return;
@@ -2217,6 +2259,493 @@ function renderExcLinkReportPickerModal(search){
   });
 }
 
+/* ============================== DAMAGES (נזקים) MODULE ==============================
+   A separate system from חריגים: exceptions are extra work/cost outside the contract,
+   possibly billable; damages are harm caused to our own or others' completed work/
+   equipment/systems during site work. The primary purpose here is documentation and
+   proof, not billing — so a damage is never auto-converted into an exception or folded
+   into exception cost totals; that stays a manual, separate step if ever needed later. */
+const DMG_CAUSE_OPTIONS = [
+  {val:'us', label:'נגרם על ידינו'},
+  {val:'other_contractor', label:'נגרם על ידי קבלן אחר'},
+  {val:'other_crew', label:'נגרם על ידי צוות/גורם אחר'},
+  {val:'unknown', label:'לא ידוע'},
+  {val:'other', label:'אחר'}
+];
+const DMG_TREATMENT_OPTIONS = [
+  {val:'none', label:'לא טופל'},
+  {val:'in_progress', label:'בטיפול'},
+  {val:'fixed', label:'תוקן'},
+  {val:'replaced', label:'הוחלף'},
+  {val:'pending_decision', label:'ממתין להחלטה'},
+  {val:'other', label:'אחר'}
+];
+const DMG_FOLLOWUP_OPTIONS = [
+  {val:'doc_only', label:'תיעוד בלבד'},
+  {val:'needs_review', label:'דורש בדיקה'},
+  {val:'needs_treatment', label:'דורש טיפול'},
+  {val:'billing_potential', label:'פוטנציאל לחיוב/קיזוז'},
+  {val:'closed', label:'נסגר'},
+  {val:'other', label:'אחר'}
+];
+function optLabel(list,val){ const o=list.find(x=>x.val===val); return o?o.label:'—'; }
+function blankDamage(){
+  const now = new Date();
+  return {
+    id:null, number:null,
+    discoveredDate: todayStr(), discoveredTime: now.toTimeString().slice(0,5),
+    occurredDate:'', occurredTime:'',
+    locationPaths: [],
+    categoryId:'',
+    causedBy:'', causedByText:'',
+    description:'',
+    photos:[], documents:[],
+    priorReportId:null, originalReportId:null, repairReportId:null,
+    treatmentStatus:'none', treatmentOther:'', treatmentNotes:'',
+    cost:'',
+    followUpStatus:'doc_only', followUpOther:'',
+    updates:[],
+    notes:'',
+    history:[], closedAt:null
+  };
+}
+const dmgCategoryName = id => { if(!id) return "—"; const c=byId(DB.damageCategories,id); return c? c.name : "(נמחק)"; };
+function dmgLocationPathLabel(path){
+  if(!path || !path.length) return '—';
+  return path.map(id=>{ const n=byId(DB.exceptionLocations,id); return n?n.name:'(נמחק)'; }).join(' › ');
+}
+function dmgLocationPathsLabel(paths){
+  if(!paths || !paths.length) return '—';
+  return paths.map(dmgLocationPathLabel).join('  |  ');
+}
+function nextDamageNumber(){
+  const nums = DB.damages.map(d=>d.number||0);
+  return (nums.length ? Math.max(...nums) : 0) + 1;
+}
+
+function viewDamagesList(){
+  const f = state.dmgFilters;
+  let list = DB.damages.slice().sort((a,b)=> (b.discoveredDate>a.discoveredDate?1:(b.discoveredDate<a.discoveredDate?-1:(b.createdAt||0)-(a.createdAt||0))));
+  if(f.status) list = list.filter(d=>d.followUpStatus===f.status);
+  if(f.search){
+    list = list.filter(d=>{
+      const hay = [
+        '#'+(d.number||''), fmtDateHe(d.discoveredDate), fmtDateHe(d.occurredDate),
+        dmgLocationPathsLabel(d.locationPaths), dmgCategoryName(d.categoryId),
+        optLabel(DMG_CAUSE_OPTIONS,d.causedBy), d.causedByText, d.description,
+        optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus), d.treatmentNotes,
+        optLabel(DMG_FOLLOWUP_OPTIONS,d.followUpStatus), d.notes,
+        (d.updates||[]).map(u=>u.label+' '+u.text).join(' ')
+      ].join(' ');
+      return smartMatch(hay, f.search);
+    });
+  }
+  const openCount = DB.damages.filter(d=>d.followUpStatus!=='closed').length;
+  return `
+    ${appbar('נזקים', {rightIcon:'⭳', rightAction:'openDamageExport'})}
+    <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;">
+      <div class="small-note">${list.length} מתוך ${DB.damages.length} נזקים</div>
+      <div class="small-note">🔓 פתוחים: <b>${openCount}</b></div>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:14px;" data-action="newDamage">✚ נזק חדש</button>
+    <div class="field"><input type="search" id="dmgSearch" placeholder="חיפוש נזק (מספר, מיקום, סוג, תיאור…)" value="${esc(f.search)}"></div>
+    <div class="filterbar">
+      <div class="fchip ${!f.status?'active':''}" data-action="setDmgStatusFilter" data-status="">הכל</div>
+      ${DMG_FOLLOWUP_OPTIONS.map(o=>`<div class="fchip ${f.status===o.val?'active':''}" data-action="setDmgStatusFilter" data-status="${o.val}">${esc(o.label)}</div>`).join('')}
+    </div>
+    ${list.length===0 ? `<div class="empty"><div class="ic">🧱</div>אין נזקים מתועדים${f.search||f.status?' התואמים לסינון':' עדיין'}</div>` :
+      list.map(d=>{
+        const photoCount = (d.photos||[]).length;
+        const linksCount = [d.priorReportId,d.originalReportId,d.repairReportId].filter(Boolean).length;
+        return `<div class="card rcard" data-action="editDamage" data-id="${d.id}" style="cursor:pointer;">
+          <div class="rcard-top">
+            <div class="rcard-date">#${d.number||'?'} · ${esc(fmtDateHe(d.discoveredDate))}</div>
+            ${d.categoryId ? `<span class="badge">${esc(dmgCategoryName(d.categoryId))}</span>` : ''}
+          </div>
+          <div style="font-weight:600;margin:4px 0;">${esc((d.description||'(ללא תיאור)').slice(0,120))}</div>
+          <div class="rcard-tags">
+            ${d.locationPaths && d.locationPaths.length ? `<span class="tag">📍 ${esc(dmgLocationPathsLabel(d.locationPaths))}</span>` : ''}
+            ${(d.photos||[]).length ? `<span class="tag">📸 ${(d.photos||[]).length} תמונות</span>` : ''}
+            ${d.cost ? `<span class="tag">💰 ${fmtNum(parseFloat(d.cost))} ₪</span>` : ''}
+            <span class="tag">🛠 ${esc(optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus))}</span>
+            <span class="tag">📌 ${esc(optLabel(DMG_FOLLOWUP_OPTIONS,d.followUpStatus))}</span>
+            ${linksCount ? `<span class="tag">🔗 ${linksCount} קישורים</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+  `;
+}
+
+function dmgPhotoField(){
+  const draft = state.dmgFormDraft;
+  const photos = draft.photos || [];
+  return `<div class="field">
+    <label>תמונות</label>
+    <div class="row2">
+      <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">📷 צילום<input type="file" accept="image/*" capture="environment" class="dmgPhotoInput" style="display:none;"></label>
+      <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 גלריה<input type="file" accept="image/*" multiple class="dmgPhotoInput" style="display:none;"></label>
+    </div>
+    ${photos.length ? `<div class="imgpreview-row">${photos.map((p,i)=>`
+      <div class="dmgphoto">
+        <div class="imgpreview"><img class="thumb" src="${p.src}" data-action="viewImage" data-src="${p.src}"><button type="button" class="rm" data-action="removeDmgPhoto" data-idx="${i}">✕</button></div>
+        <input type="text" placeholder="תיאור תמונה…" value="${esc(p.note||'')}" data-dmg-photo-note="${i}">
+      </div>`).join('')}</div>` : ''}
+  </div>`;
+}
+function dmgLocationsField(){
+  const draft = state.dmgFormDraft;
+  const paths = draft.locationPaths || [];
+  return `<div class="field">
+    <label>מיקום (ניתן להוסיף מספר מיקומים — אותה היררכיית מיקומים כמו בחריגים)</label>
+    ${paths.map((p,i)=>`<div class="dmg-loctag"><span>📍 ${esc(dmgLocationPathLabel(p))}</span><span class="x" data-action="removeDmgLocationPath" data-idx="${i}">×</span></div>`).join('')}
+    <button type="button" class="btn btn-outline btn-sm" data-action="openDmgLocationPicker">✚ הוספת מיקום</button>
+  </div>`;
+}
+function dmgCausedByField(){
+  const draft = state.dmgFormDraft;
+  return `<div class="field">
+    <label>מי גרם לנזק / מקור הנזק</label>
+    <select name="causedBy">
+      <option value="">— בחר —</option>
+      ${DMG_CAUSE_OPTIONS.map(o=>`<option value="${o.val}" ${draft.causedBy===o.val?'selected':''}>${esc(o.label)}</option>`).join('')}
+    </select>
+    <textarea name="causedByText" placeholder="מי/מה גרם לנזק — למשל: נגרם במהלך עבודות גבס של קבלן X" style="margin-top:8px;">${esc(draft.causedByText)}</textarea>
+  </div>`;
+}
+function dmgTreatmentField(){
+  const draft = state.dmgFormDraft;
+  return `<div class="field">
+    <label>טיפול בנזק</label>
+    <select name="treatmentStatus">
+      ${DMG_TREATMENT_OPTIONS.map(o=>`<option value="${o.val}" ${draft.treatmentStatus===o.val?'selected':''}>${esc(o.label)}</option>`).join('')}
+    </select>
+    ${draft.treatmentStatus==='other' ? `<input type="text" name="treatmentOther" placeholder="פרט…" value="${esc(draft.treatmentOther)}" style="margin-top:8px;">` : ''}
+    <textarea name="treatmentNotes" placeholder="פירוט הטיפול שבוצע (אופציונלי)…" style="margin-top:8px;">${esc(draft.treatmentNotes)}</textarea>
+  </div>`;
+}
+function dmgFollowUpField(){
+  const draft = state.dmgFormDraft;
+  return `<div class="field">
+    <label>סיווג המשך</label>
+    <select name="followUpStatus">
+      ${DMG_FOLLOWUP_OPTIONS.map(o=>`<option value="${o.val}" ${draft.followUpStatus===o.val?'selected':''}>${esc(o.label)}</option>`).join('')}
+    </select>
+    ${draft.followUpStatus==='other' ? `<input type="text" name="followUpOther" placeholder="פרט…" value="${esc(draft.followUpOther)}" style="margin-top:8px;">` : ''}
+  </div>`;
+}
+function dmgLinkField(field, label, placeholder){
+  const draft = state.dmgFormDraft;
+  const id = draft[field];
+  const rep = id ? byId(DB.reports, id) : null;
+  return `<div class="field">
+    <label>${esc(label)}</label>
+    ${rep
+      ? `<div class="chipset"><span class="chip">${esc(fmtDateHe(rep.date))} — ${esc(workTypeNamesMulti(rep.workTypeIds))}, ${esc(fmtHM(rep.hours))} שעות <span class="x" data-action="unlinkDmgReport" data-field="${field}">×</span></span></div>`
+      : `<button type="button" class="selectbtn placeholder" data-action="openDmgLinkPicker" data-field="${field}">${esc(placeholder)}</button>`}
+  </div>`;
+}
+function dmgUpdatesField(){
+  const draft = state.dmgFormDraft;
+  const updates = draft.updates || [];
+  return `<div class="field">
+    <label>מעקב דיווח / תקשורת (אפשר להוסיף כמה עדכונים לאורך זמן — כותרת חופשית לכל עדכון)</label>
+    ${updates.map(u=>`
+      <div class="dmg-update-row">
+        <div class="row2">
+          <input type="date" value="${esc(u.date)}" data-dmg-update-id="${u.id}" data-dmg-update-field="date">
+          <input type="text" placeholder="כותרת (למשל: דווח למנהל האתר)" value="${esc(u.label)}" data-dmg-update-id="${u.id}" data-dmg-update-field="label">
+        </div>
+        <textarea placeholder="פירוט / תגובה…" data-dmg-update-id="${u.id}" data-dmg-update-field="text">${esc(u.text)}</textarea>
+        <button type="button" class="iconlink danger" style="margin-top:8px;" data-action="removeDmgUpdate" data-id="${u.id}">🗑 הסרת עדכון</button>
+      </div>`).join('')}
+    <button type="button" class="btn btn-outline btn-sm" data-action="addDmgUpdate">✚ הוספת עדכון</button>
+  </div>`;
+}
+function dmgHistorySection(draft){
+  if(!draft._editId) return '';
+  const hist = (draft.history||[]).slice().sort((a,b)=>b.at-a.at);
+  if(!hist.length) return '';
+  return `<div class="field">
+    <label>היסטוריה (לא ניתנת לעריכה — נשמרת אוטומטית)</label>
+    <div class="card" style="padding:10px 12px;">
+      ${hist.map(h=>`<div class="dmg-hist-row"><div class="dmg-hist-date">${esc(new Date(h.at).toLocaleString('he-IL'))}</div><div>${esc(h.text)}</div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function viewDamageForm(editId){
+  let draft;
+  if(editId){
+    if(!(state.dmgFormDraft && state.dmgFormDraft._editId===editId)){
+      const d = byId(DB.damages, editId);
+      draft = Object.assign(blankDamage(), JSON.parse(JSON.stringify(d)));
+      draft._editId = editId;
+      draft.cost = (d.cost!==null && d.cost!==undefined) ? String(d.cost) : '';
+    } else {
+      draft = state.dmgFormDraft;
+    }
+  } else {
+    draft = (state.dmgFormDraft && !state.dmgFormDraft._editId) ? state.dmgFormDraft : blankDamage();
+  }
+  state.dmgFormDraft = draft;
+
+  return `
+    ${appbar(editId ? 'עריכת נזק' : 'תיעוד נזק חדש')}
+    <form id="damageForm" class="card">
+      ${editId ? `<div class="small-note" style="margin-bottom:10px;">נזק #${draft.number||'?'}</div>` : ''}
+      <div class="section-title" style="margin-top:0;">גילוי הנזק</div>
+      <div class="row2">
+        <div class="field"><label>תאריך גילוי *</label><input type="date" name="discoveredDate" value="${esc(draft.discoveredDate)}" required></div>
+        <div class="field"><label>שעת גילוי</label><input type="time" name="discoveredTime" value="${esc(draft.discoveredTime)}"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>תאריך התרחשות (אם ידוע)</label><input type="date" name="occurredDate" value="${esc(draft.occurredDate)}"></div>
+        <div class="field"><label>שעת התרחשות (אם ידוע)</label><input type="time" name="occurredTime" value="${esc(draft.occurredTime)}"></div>
+      </div>
+
+      ${dmgLocationsField()}
+
+      <div class="field">
+        <div class="field-label-row"><label>סוג הנזק</label><button type="button" class="addlink" data-action="openDmgQuickAddCategory">✚ חדש</button></div>
+        <button type="button" class="selectbtn ${draft.categoryId?'':'placeholder'}" data-action="openDmgCategoryPicker">
+          ${draft.categoryId ? esc(dmgCategoryName(draft.categoryId)) : 'בחר סוג נזק…'}
+        </button>
+      </div>
+
+      ${dmgCausedByField()}
+
+      <div class="field">
+        <label>תיאור הנזק *</label>
+        <textarea name="description" placeholder="תיאור מדויק של מה שקרה…" required style="min-height:100px;">${esc(draft.description)}</textarea>
+      </div>
+
+      ${dmgPhotoField()}
+      ${documentsField('dmgFormDraft')}
+
+      <div class="section-title">קשרים לתיעוד ולעבודה</div>
+      ${dmgLinkField('priorReportId', 'מצב לפני הנזק — קישור לתיעוד קודם (אופציונלי)', 'קשר לדיווח שמראה שהעבודה הייתה תקינה…')}
+      ${dmgLinkField('originalReportId', 'קישור לדיווח העבודה המקורי שנפגע (אופציונלי)', 'קשר לדיווח העבודה שבוצעה…')}
+
+      <div class="section-title">טיפול ומעקב</div>
+      ${dmgTreatmentField()}
+      ${dmgLinkField('repairReportId', 'קישור לדיווח התיקון (אם בוצע, אופציונלי)', 'קשר לדיווח העבודה שביצע את התיקון…')}
+      <div class="field">
+        <label>עלות משוערת (אופציונלי, ₪)</label>
+        <input type="number" name="cost" step="any" min="0" placeholder="לא נכלל אוטומטית בחישובי חריגים" value="${esc(draft.cost)}">
+      </div>
+      ${dmgFollowUpField()}
+
+      <div class="section-title">מעקב דיווח / תקשורת</div>
+      ${dmgUpdatesField()}
+
+      <div class="field">
+        <label>הערות נוספות</label>
+        <textarea name="notes" placeholder="אופציונלי…">${esc(draft.notes)}</textarea>
+      </div>
+
+      ${dmgHistorySection(draft)}
+
+      <div class="btnrow">
+        <button type="button" class="btn btn-outline" data-nav="damages">ביטול</button>
+        <button type="submit" class="btn btn-primary">${editId?'שמור שינויים':'שמור נזק'}</button>
+      </div>
+      ${editId ? `<button type="button" class="btn btn-outline" style="margin-top:10px;width:100%;" data-action="exportSingleDamagePdf" data-id="${editId}">🖨 ייצוא PDF לנזק זה</button>` : ''}
+      ${editId ? `<button type="button" class="btn btn-danger" style="margin-top:10px;width:100%;" data-action="deleteDamage" data-id="${editId}">מחיקת נזק</button>` : ''}
+    </form>
+  `;
+}
+
+async function submitDamageForm(form){
+  const draft = state.dmgFormDraft;
+  const fd = new FormData(form);
+  const discoveredDate = fd.get('discoveredDate');
+  const description = (fd.get('description')||'').trim();
+  if(!discoveredDate || !description){ toast('נא למלא תאריך גילוי ותיאור הנזק'); return; }
+
+  const existing = draft._editId ? byId(DB.damages, draft._editId) : null;
+  const prevTreatment = existing ? existing.treatmentStatus : null;
+  const prevFollowUp = existing ? existing.followUpStatus : null;
+  const newTreatment = fd.get('treatmentStatus') || 'none';
+  const newFollowUp = fd.get('followUpStatus') || 'doc_only';
+
+  const history = existing ? (existing.history||[]).slice() : [];
+  if(!existing){
+    history.push({at:Date.now(), type:'created', text:'הנזק נוצר ותועד'});
+  } else {
+    history.push({at:Date.now(), type:'edited', text:'הנזק עודכן'});
+    if(prevTreatment !== newTreatment){
+      history.push({at:Date.now(), type:'treatment', text:`סטטוס טיפול שונה מ"${optLabel(DMG_TREATMENT_OPTIONS,prevTreatment)}" ל"${optLabel(DMG_TREATMENT_OPTIONS,newTreatment)}"`});
+    }
+    if(prevFollowUp !== newFollowUp){
+      history.push({at:Date.now(), type:'followup', text:`סיווג המשך שונה מ"${optLabel(DMG_FOLLOWUP_OPTIONS,prevFollowUp)}" ל"${optLabel(DMG_FOLLOWUP_OPTIONS,newFollowUp)}"`});
+    }
+  }
+  const wasClosed = existing && existing.followUpStatus==='closed';
+  const nowClosed = newFollowUp==='closed';
+  let closedAt = existing ? existing.closedAt : null;
+  if(!wasClosed && nowClosed){ closedAt = Date.now(); history.push({at:Date.now(), type:'closed', text:'הנזק נסגר'}); }
+  if(wasClosed && !nowClosed){ closedAt = null; history.push({at:Date.now(), type:'reopened', text:'הנזק נפתח מחדש'}); }
+
+  const d = {
+    id: draft._editId || uid(),
+    number: existing ? existing.number : nextDamageNumber(),
+    discoveredDate,
+    discoveredTime: fd.get('discoveredTime') || '',
+    occurredDate: fd.get('occurredDate') || '',
+    occurredTime: fd.get('occurredTime') || '',
+    locationPaths: (draft.locationPaths||[]).map(p=>p.slice()),
+    categoryId: draft.categoryId || '',
+    causedBy: fd.get('causedBy') || '',
+    causedByText: fd.get('causedByText') || '',
+    description,
+    photos: (draft.photos||[]).slice(),
+    documents: (draft.documents||[]).slice(),
+    priorReportId: draft.priorReportId || null,
+    originalReportId: draft.originalReportId || null,
+    repairReportId: draft.repairReportId || null,
+    treatmentStatus: newTreatment,
+    treatmentOther: fd.get('treatmentOther') || '',
+    treatmentNotes: fd.get('treatmentNotes') || '',
+    cost: fd.get('cost') ? parseFloat(fd.get('cost')) : null,
+    followUpStatus: newFollowUp,
+    followUpOther: fd.get('followUpOther') || '',
+    updates: (draft.updates||[]).slice(),
+    notes: fd.get('notes') || '',
+    history,
+    closedAt,
+    createdAt: existing ? existing.createdAt : Date.now(),
+    updatedAt: Date.now()
+  };
+  const idx = DB.damages.findIndex(x=>x.id===d.id);
+  if(idx>=0) DB.damages[idx] = d; else DB.damages.push(d);
+  await saveCollection('damages');
+  state.dmgFormDraft = null;
+  toast(existing ? 'הנזק עודכן' : `נזק #${d.number} נשמר`);
+  go({name:'damages'});
+}
+
+/* ---- damage category picker (single-select, with quick-add/reorder/delete — same pattern as exception categories) ---- */
+function openDmgCategoryPicker(){ pushModalHistory(); renderDmgCategoryPickerModal(); }
+function renderDmgCategoryPickerModal(){
+  const draft = state.dmgFormDraft;
+  const cats = activeOf(DB.damageCategories);
+  const html = `
+    <div class="overlay" id="dmgCategoryModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>סוג הנזק</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div id="dmgCategoryListWrap">
+          <div class="msel-row ${!draft.categoryId?'checked':''}" data-action="selectDmgCategory" data-id="">
+            <div class="msel-check">${!draft.categoryId?'✓':''}</div><div class="lbl">— ללא סוג —</div>
+          </div>
+          ${cats.length===0 ? `<div class="empty"><div class="ic">🧱</div>אין סוגי נזק עדיין</div>` :
+            cats.map(c=>{
+              const checked = draft.categoryId===c.id;
+              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+                <div class="msel-check" data-action="selectDmgCategory" data-id="${c.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+                <div class="lbl" data-action="selectDmgCategory" data-id="${c.id}" style="cursor:pointer;flex:1;">${esc(c.name)}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="damageCategories" data-id="${c.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="damageCategories" data-id="${c.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteDmgCategoryFromPicker" data-id="${c.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openDmgQuickAddCategory">✚ סוג נזק חדש</button>
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">סגור</button>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+async function openDmgQuickAddCategory(){
+  const name = await showPrompt('שם סוג הנזק החדש', '', 'למשל: צנרת מים');
+  if(!name || !name.trim()) return;
+  const obj = {id:uid(), name:name.trim(), active:true, order:DB.damageCategories.length, createdAt:Date.now()};
+  DB.damageCategories.push(obj);
+  await saveCollection('damageCategories');
+  state.dmgFormDraft.categoryId = obj.id;
+  toast('סוג הנזק נוסף ונבחר');
+  render();
+}
+
+/* ---- damage location picker — shares the SAME nested exceptionLocations tree used by
+   חריגים (per requirement), but lets you add more than one location to a single damage. ---- */
+function openDmgLocationPicker(){
+  pushModalHistory();
+  state._dmgLocPath = [];
+  renderDmgLocationPickerModal();
+}
+function renderDmgLocationPickerModal(){
+  const path = state._dmgLocPath;
+  const parentId = path.length ? path[path.length-1] : null;
+  const children = DB.exceptionLocations.filter(n=>n.parentId===parentId && n.active).sort((a,b)=>(a.order??0)-(b.order??0));
+  const crumbLabel = path.length ? path.map(id=>{ const n=byId(DB.exceptionLocations,id); return n?n.name:'?'; }).join(' › ') : 'שורש (בחר בניין/אתר)';
+  const html = `
+    <div class="overlay" id="dmgLocModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>הוספת מיקום</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="hint" style="margin-bottom:8px;">📍 ${esc(crumbLabel)}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          ${path.length ? `<button type="button" class="btn btn-outline btn-sm" data-action="dmgLocUp">⬆ רמה למעלה</button>` : ''}
+          ${path.length ? `<button type="button" class="btn btn-outline btn-sm" data-action="dmgLocRoot">🏠 שורש</button>` : ''}
+        </div>
+        <div id="dmgLocListWrap">
+          ${children.length===0 ? `<div class="empty"><div class="ic">📍</div>אין תתי-מיקום ברמה הזו עדיין</div>` :
+            children.map(n=>{
+              const hasKids = DB.exceptionLocations.some(x=>x.parentId===n.id && x.active);
+              return `<div class="msel-row" style="gap:6px;">
+                <div class="lbl" data-action="dmgLocDrill" data-id="${n.id}" style="flex:1;cursor:pointer;">${esc(n.name)}${hasKids?' ›':''}</div>
+                <div class="reorder-btns">
+                  <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="up">▲</button>
+                  <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="down">▼</button>
+                </div>
+                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="dmgLocDelete" data-id="${n.id}">🗑</button>
+              </div>`;
+            }).join('')}
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="dmgLocAdd">✚ הוספת תת-מיקום כאן</button>
+        ${path.length ? `<button class="btn btn-primary" style="margin-top:14px;" data-action="dmgLocConfirm">✓ הוספת מיקום: ${esc(crumbLabel)}</button>` : ''}
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+}
+
+/* ---- link a damage to an existing work report (prior state / original work / repair) ---- */
+function openDmgLinkPicker(field){
+  pushModalHistory();
+  state._dmgLinkField = field;
+  renderDmgLinkPickerModal('');
+}
+function renderDmgLinkPickerModal(search){
+  const list = DB.reports.slice().sort((a,b)=> b.date>a.date?1:(b.date<a.date?-1:0)).filter(r=>{
+    if(!search) return true;
+    const hay = [r.description, r.notes, workTypeNamesMulti(r.workTypeIds), locationNamesMulti(r.locationIds,r.locationTexts), fmtDateHe(r.date)].join(' ');
+    return smartMatch(hay, search);
+  }).slice(0,60);
+  const html = `
+    <div class="overlay" id="dmgLinkModalOverlay">
+      <div class="sheet">
+        <div class="sheet-head"><h3>קישור לדיווח עבודה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <input type="search" class="search-in-modal" id="dmgLinkSearchInput" placeholder="חיפוש דיווח (תאריך, תיאור, מיקום…)" value="${esc(search)}">
+        <div id="dmgLinkListWrap">
+          ${list.length===0 ? `<div class="empty"><div class="ic">🔍</div>לא נמצאו דיווחים</div>` :
+            list.map(r=>`<div class="msel-row" data-action="linkDmgReport" data-id="${r.id}" style="cursor:pointer;">
+              <div class="lbl" style="flex:1;">
+                <div style="font-weight:600;">${esc(fmtDateHe(r.date))} — ${esc(workTypeNamesMulti(r.workTypeIds))}</div>
+                <div class="sub">${esc(locationNamesMulti(r.locationIds,r.locationTexts))} · ${esc(fmtHM(r.hours))} שעות</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalRoot').innerHTML = html;
+  document.getElementById('dmgLinkSearchInput').addEventListener('input', e=>{
+    renderDmgLinkPickerModal(e.target.value);
+    document.getElementById('dmgLinkSearchInput').focus();
+  });
+}
+
+
 /* ============================== TASKS (משימות) MODULE ============================== */
 const PRIORITY_COLORS = {1:'#c8434c', 2:'#e0752e', 3:'#d9a812', 4:'#3f9142', 5:'#2f6fb0', 6:'#7a5aa8'};
 const taskCategoryName = id => { if(!id) return "—"; const c=byId(DB.taskCategories,id); return c? c.name : "(נמחק)"; };
@@ -2586,9 +3115,23 @@ function styleSheetRTL(ws){
   ws['!autofilter'] = { ref: ws['!ref'] };
 }
 
+function flatLocationOptions(){
+  // depth-first flatten of the exceptionLocations tree (shared with damages) with indentation
+  const out = [];
+  const walk = (parentId, depth) => {
+    DB.exceptionLocations.filter(n=>n.parentId===parentId && n.active).sort((a,b)=>(a.order??0)-(b.order??0)).forEach(n=>{
+      out.push({id:n.id, label: '　'.repeat(depth) + n.name});
+      walk(n.id, depth+1);
+    });
+  };
+  walk(null, 0);
+  return out;
+}
 function openExportModal(kind){
   pushModalHistory();
-  const title = kind==='exceptions' ? 'ייצוא חריגים' : 'ייצוא ל-Excel / PDF';
+  const title = kind==='exceptions' ? 'ייצוא חריגים' : (kind==='damages' ? 'ייצוא נזקים' : 'ייצוא ל-Excel / PDF');
+  const catOptions = kind==='damages' ? activeOf(DB.damageCategories) : [];
+  const locOptions = kind==='damages' ? flatLocationOptions() : [];
   const html = `<div class="overlay" id="exportOverlay" data-kind="${kind}">
     <div class="sheet">
       <div class="sheet-head"><h3>${esc(title)}</h3><button class="closebtn" data-action="closeModal">✕</button></div>
@@ -2607,6 +3150,20 @@ function openExportModal(kind){
           <div class="field"><label>עד תאריך</label><input type="date" id="exportTo"></div>
         </div>
       </div>
+      ${kind==='damages' ? `
+      <div class="field"><label>סינון לפי מיקום/בניין (אופציונלי)</label>
+        <select id="exportDmgLocation"><option value="">— הכל —</option>${locOptions.map(o=>`<option value="${o.id}">${esc(o.label)}</option>`).join('')}</select>
+        <div class="hint">כולל גם כל תתי-המיקום שמתחת לבחירה</div>
+      </div>
+      <div class="field"><label>סינון לפי סוג נזק (אופציונלי)</label>
+        <select id="exportDmgCategory"><option value="">— הכל —</option>${catOptions.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>סינון לפי סיווג המשך (אופציונלי)</label>
+        <select id="exportDmgStatus"><option value="">— הכל —</option>${DMG_FOLLOWUP_OPTIONS.map(o=>`<option value="${o.val}">${esc(o.label)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>סינון לפי גורם אחראי (אופציונלי)</label>
+        <select id="exportDmgCause"><option value="">— הכל —</option>${DMG_CAUSE_OPTIONS.map(o=>`<option value="${o.val}">${esc(o.label)}</option>`).join('')}</select>
+      </div>` : ''}
       <div class="row2">
         <button class="btn btn-primary" data-action="doExport">⭳ Excel</button>
         <button class="btn btn-outline" data-action="doExportPdf">🖨 PDF</button>
@@ -2630,6 +3187,26 @@ function readExportRange(){
   }
   return {start,end};
 }
+// Reads the (damages-only) extra filter selects from the still-open export modal — must be
+// called before closeModal() removes them from the DOM.
+function getFilteredDamagesForExport(start,end){
+  const catSel = document.getElementById('exportDmgCategory');
+  const statusSel = document.getElementById('exportDmgStatus');
+  const causeSel = document.getElementById('exportDmgCause');
+  const locSel = document.getElementById('exportDmgLocation');
+  const cat = catSel ? catSel.value : '';
+  const status = statusSel ? statusSel.value : '';
+  const cause = causeSel ? causeSel.value : '';
+  const loc = locSel ? locSel.value : '';
+  return DB.damages.filter(d=>{
+    if(!inRange(d.discoveredDate,start,end)) return false;
+    if(cat && d.categoryId!==cat) return false;
+    if(status && d.followUpStatus!==status) return false;
+    if(cause && d.causedBy!==cause) return false;
+    if(loc && !(d.locationPaths||[]).some(p=>p.includes(loc))) return false;
+    return true;
+  }).sort((a,b)=>a.discoveredDate<b.discoveredDate?-1:1);
+}
 
 function doExport(){
   const overlay = document.getElementById('exportOverlay');
@@ -2638,6 +3215,9 @@ function doExport(){
   if(kind==='exceptions'){
     const list = DB.exceptions.filter(e=>inRange(e.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
     doExportExceptionsExcel(list, start, end);
+  } else if(kind==='damages'){
+    const list = getFilteredDamagesForExport(start,end);
+    doExportDamagesExcel(list, start, end);
   } else {
     const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
     doExportReportsExcel(list, start, end);
@@ -2786,12 +3366,74 @@ function doExportExceptionsExcel(list, start, end){
   downloadBlob(wbout, fname);
 }
 
+function doExportDamagesExcel(list, start, end){
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: נתונים — clean and filterable, no images inside the data table
+  const rawRows = list.map(d=>({
+    "מספר": d.number||'',
+    "תאריך גילוי": fmtDateHe(d.discoveredDate),
+    "שעת גילוי": d.discoveredTime||'',
+    "תאריך התרחשות": d.occurredDate?fmtDateHe(d.occurredDate):'',
+    "מיקום": dmgLocationPathsLabel(d.locationPaths),
+    "סוג נזק": dmgCategoryName(d.categoryId),
+    "גורם אחראי": optLabel(DMG_CAUSE_OPTIONS,d.causedBy) + (d.causedByText?(' — '+d.causedByText):''),
+    "תיאור": d.description||'',
+    "טיפול": optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus),
+    "פירוט טיפול": d.treatmentNotes||'',
+    "עלות משוערת (₪)": d.cost||'',
+    "סיווג המשך": optLabel(DMG_FOLLOWUP_OPTIONS,d.followUpStatus),
+    "מספר תמונות": (d.photos||[]).length,
+    "מצב לפני — דיווח מקושר": d.priorReportId ? fmtDateHe((byId(DB.reports,d.priorReportId)||{}).date||'') : '',
+    "עבודה מקורית — דיווח מקושר": d.originalReportId ? fmtDateHe((byId(DB.reports,d.originalReportId)||{}).date||'') : '',
+    "תיקון — דיווח מקושר": d.repairReportId ? fmtDateHe((byId(DB.reports,d.repairReportId)||{}).date||'') : '',
+    "הערות": d.notes||''
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(rawRows.length?rawRows:[{"מספר":''}]);
+  styleSheetRTL(ws1);
+  XLSX.utils.book_append_sheet(wb, ws1, "נתונים");
+
+  // Sheet 2: תמונות — a separate sheet, metadata only (record #, photo #, caption) so the
+  // main data sheet never alternates text/photo/text and stays easy to filter and manage.
+  const photoRows = [];
+  list.forEach(d=>{
+    (d.photos||[]).forEach((p,i)=>{
+      photoRows.push({ "מספר נזק": d.number||'', "מספר תמונה": i+1, "תיאור תמונה": p.note||'' });
+    });
+  });
+  const ws2 = XLSX.utils.json_to_sheet(photoRows.length?photoRows:[{"מספר נזק":'', "מספר תמונה":'', "תיאור תמונה":''}]);
+  styleSheetRTL(ws2);
+  XLSX.utils.book_append_sheet(wb, ws2, "תמונות");
+
+  // Sheet 3: summary by damage type
+  const cmap = {};
+  list.forEach(d=>{
+    const key = d.categoryId||'';
+    if(!cmap[key]) cmap[key] = {count:0, cost:0};
+    cmap[key].count += 1; cmap[key].cost += (parseFloat(d.cost)||0);
+  });
+  const wsRows3 = Object.entries(cmap).map(([id,dd])=>({
+    "סוג נזק": id?dmgCategoryName(id):'ללא סוג', "מספר נזקים": dd.count, "סה\"כ עלות משוערת (₪)": +dd.cost.toFixed(2)
+  }));
+  const ws3 = XLSX.utils.json_to_sheet(wsRows3.length?wsRows3:[{"סוג נזק":''}]);
+  styleSheetRTL(ws3);
+  XLSX.utils.book_append_sheet(wb, ws3, "סיכום לפי סוג");
+
+  wb.Workbook = { Views: [{ RTL: true }] };
+  const fname = `דוח-נזקים_${start}_${end}.xlsx`;
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  downloadBlob(wbout, fname);
+}
+
 /* ---- PDF export: rendered as a print-ready RTL HTML page; the person uses the browser's
    "Save as PDF" option in the print dialog. This needs no external library and works fully
    offline, which matters for a site-documentation tool used without signal. ---- */
-function openPrintWindow(title, bodyHtml){
+function openBlankPrintWindow(){
   const w = window.open('', '_blank');
-  if(!w){ toast('הדפדפן חסם את חלון ההדפסה — יש לאפשר חלונות קופצים ולנסות שוב'); return; }
+  if(!w){ toast('הדפדפן חסם את חלון ההדפסה — יש לאפשר חלונות קופצים ולנסות שוב'); return null; }
+  return w;
+}
+function writePrintDocument(w, title, bodyHtml){
   w.document.write(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>${esc(title)}</title>
     <style>
       body{font-family:Arial,Helvetica,sans-serif;direction:rtl;padding:24px;color:#111;}
@@ -2807,6 +3449,11 @@ function openPrintWindow(title, bodyHtml){
     </style></head><body>${bodyHtml}<div class="credit">פותח על ידי דוד אורן</div></body></html>`);
   w.document.close();
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(err){} }, 400);
+}
+function openPrintWindow(title, bodyHtml){
+  const w = openBlankPrintWindow();
+  if(!w) return;
+  writePrintDocument(w, title, bodyHtml);
 }
 function buildReportsPrintHTML(list, start, end){
   const totalHours = list.reduce((s,r)=>s+r.hours,0);
@@ -2832,18 +3479,118 @@ function buildExceptionsPrintHTML(list, start, end){
   html += `</tbody><tfoot><tr><td colspan="5">סה"כ עלות משוערת</td><td>${esc(fmtNum(totalCost))} ₪</td><td></td></tr></tfoot></table>`;
   return html;
 }
-function doExportPdf(){
+// Downsizes an already-stored (already-compressed) photo further, ONLY for the copy embedded
+// in a printed/PDF report — the canonical copy saved on the record is never touched or re-saved.
+function compressDataUrlForPdf(dataUrl, maxW=900, quality=0.6){
+  return new Promise((resolve)=>{
+    try{
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxW/img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width*scale));
+        canvas.height = Math.max(1, Math.round(img.height*scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
+async function buildDamagesPrintHTML(list, start, end){
+  const totalCost = list.reduce((s,d)=>s+(parseFloat(d.cost)||0),0);
+  let html = `<h1>דוח נזקים</h1><div class="meta">טווח: ${esc(fmtDateHe(start))} – ${esc(fmtDateHe(end))} · הופק ב-${esc(fmtDateHe(todayStr()))}</div>`;
+  html += `<h2>נזקים (${list.length})</h2>`;
+  html += `<table><thead><tr><th>#</th><th>תאריך גילוי</th><th>מיקום</th><th>סוג</th><th>גורם</th><th>טיפול</th><th>עלות</th><th>סיווג המשך</th></tr></thead><tbody>`;
+  list.forEach(d=>{
+    html += `<tr><td>${d.number||''}</td><td>${esc(fmtDateHe(d.discoveredDate))}</td><td>${esc(dmgLocationPathsLabel(d.locationPaths))}</td><td>${esc(dmgCategoryName(d.categoryId))}</td><td>${esc(optLabel(DMG_CAUSE_OPTIONS,d.causedBy))}</td><td>${esc(optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus))}</td><td>${d.cost?esc(fmtNum(parseFloat(d.cost)))+' ₪':''}</td><td>${esc(optLabel(DMG_FOLLOWUP_OPTIONS,d.followUpStatus))}</td></tr>`;
+  });
+  html += `</tbody><tfoot><tr><td colspan="6">סה"כ עלות משוערת</td><td>${esc(fmtNum(totalCost))} ₪</td><td></td></tr></tfoot></table>`;
+
+  const withPhotos = list.filter(d=>(d.photos||[]).length);
+  if(withPhotos.length){
+    html += `<h2>תמונות תיעוד</h2>`;
+    for(const d of withPhotos){
+      html += `<div style="margin-bottom:16px;"><b>נזק #${d.number||''} — ${esc(fmtDateHe(d.discoveredDate))} — ${esc(dmgCategoryName(d.categoryId))}</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">`;
+      for(const p of d.photos){
+        const small = await compressDataUrlForPdf(p.src);
+        html += `<div style="width:150px;"><img src="${small}" style="width:150px;height:110px;object-fit:cover;border:1px solid #ccc;border-radius:4px;">${p.note?`<div style="font-size:10px;color:#555;margin-top:2px;">${esc(p.note)}</div>`:''}</div>`;
+      }
+      html += `</div></div>`;
+    }
+  }
+  return html;
+}
+async function buildSingleDamagePrintHTML(d){
+  const linkLabel = (id)=>{ if(!id) return '—'; const r=byId(DB.reports,id); return r ? `${fmtDateHe(r.date)} — ${workTypeNamesMulti(r.workTypeIds)}` : '(נמחק)'; };
+  let html = `<h1>דוח נזק מס' ${d.number||''}</h1>`;
+  html += `<div class="meta">תאריך גילוי: ${esc(fmtDateHe(d.discoveredDate))}${d.discoveredTime?(' · שעה '+esc(d.discoveredTime)):''}${d.occurredDate?(' · תאריך התרחשות: '+esc(fmtDateHe(d.occurredDate))):''} · הופק ב-${esc(fmtDateHe(todayStr()))}</div>`;
+  html += `<table><tbody>
+    <tr><th>מיקום</th><td>${esc(dmgLocationPathsLabel(d.locationPaths))}</td></tr>
+    <tr><th>סוג הנזק</th><td>${esc(dmgCategoryName(d.categoryId))}</td></tr>
+    <tr><th>גורם / מקור הנזק</th><td>${esc(optLabel(DMG_CAUSE_OPTIONS,d.causedBy))}${d.causedByText?(' — '+esc(d.causedByText)):''}</td></tr>
+    <tr><th>תיאור הנזק</th><td>${esc(d.description||'')}</td></tr>
+    <tr><th>טיפול</th><td>${esc(optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus))}${d.treatmentNotes?(' — '+esc(d.treatmentNotes)):''}</td></tr>
+    <tr><th>עלות משוערת</th><td>${d.cost?esc(fmtNum(parseFloat(d.cost)))+' ₪':'—'}</td></tr>
+    <tr><th>סיווג המשך</th><td>${esc(optLabel(DMG_FOLLOWUP_OPTIONS,d.followUpStatus))}</td></tr>
+    <tr><th>מצב לפני — דיווח מקושר</th><td>${esc(linkLabel(d.priorReportId))}</td></tr>
+    <tr><th>עבודה מקורית — דיווח מקושר</th><td>${esc(linkLabel(d.originalReportId))}</td></tr>
+    <tr><th>תיקון — דיווח מקושר</th><td>${esc(linkLabel(d.repairReportId))}</td></tr>
+    <tr><th>הערות</th><td>${esc(d.notes||'')}</td></tr>
+  </tbody></table>`;
+
+  if((d.updates||[]).length){
+    html += `<h2>מעקב דיווח / תקשורת</h2><table><thead><tr><th>תאריך</th><th>כותרת</th><th>פירוט</th></tr></thead><tbody>`;
+    d.updates.forEach(u=>{ html += `<tr><td>${esc(fmtDateHe(u.date))}</td><td>${esc(u.label)}</td><td>${esc(u.text)}</td></tr>`; });
+    html += `</tbody></table>`;
+  }
+
+  if((d.photos||[]).length){
+    html += `<h2>תמונות תיעוד</h2><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
+    for(const p of d.photos){
+      const small = await compressDataUrlForPdf(p.src, 1100, 0.75);
+      html += `<div style="width:220px;"><img src="${small}" style="width:220px;height:160px;object-fit:cover;border:1px solid #ccc;border-radius:4px;">${p.note?`<div style="font-size:11px;color:#555;margin-top:3px;">${esc(p.note)}</div>`:''}</div>`;
+    }
+    html += `</div>`;
+  }
+  if((d.history||[]).length){
+    const hist = d.history.slice().sort((a,b)=>b.at-a.at);
+    html += `<h2>היסטוריה</h2><table><thead><tr><th>מתי</th><th>מה קרה</th></tr></thead><tbody>`;
+    hist.forEach(h=>{ html += `<tr><td>${esc(new Date(h.at).toLocaleString('he-IL'))}</td><td>${esc(h.text)}</td></tr>`; });
+    html += `</tbody></table>`;
+  }
+  return html;
+}
+async function exportSingleDamagePdf(id){
+  const d = byId(DB.damages, id);
+  if(!d) return;
+  const w = openBlankPrintWindow();
+  if(!w) return;
+  const bodyHtml = await buildSingleDamagePrintHTML(d);
+  writePrintDocument(w, `נזק מס' ${d.number||''}`, bodyHtml);
+}
+async function doExportPdf(){
   const overlay = document.getElementById('exportOverlay');
   const kind = overlay ? overlay.getAttribute('data-kind') : 'reports';
   const {start,end} = readExportRange();
   if(kind==='exceptions'){
     const list = DB.exceptions.filter(e=>inRange(e.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
     openPrintWindow('דוח חריגים', buildExceptionsPrintHTML(list, start, end));
+    closeModal();
+  } else if(kind==='damages'){
+    const list = getFilteredDamagesForExport(start,end);
+    const w = openBlankPrintWindow();
+    closeModal();
+    if(!w) return;
+    const bodyHtml = await buildDamagesPrintHTML(list, start, end);
+    writePrintDocument(w, 'דוח נזקים', bodyHtml);
   } else {
     const list = DB.reports.filter(r=>inRange(r.date,start,end)).sort((a,b)=>a.date<b.date?-1:1);
     openPrintWindow('דוח עבודה', buildReportsPrintHTML(list, start, end));
+    closeModal();
   }
-  closeModal();
 }
 
 /* ============================== BACKUP / RESTORE / RESET ============================== */
@@ -2980,6 +3727,9 @@ document.addEventListener('submit', async (e)=>{
   } else if(e.target.id==='exceptionForm'){
     e.preventDefault();
     await submitExceptionForm(e.target);
+  } else if(e.target.id==='damageForm'){
+    e.preventDefault();
+    await submitDamageForm(e.target);
   }
 });
 
@@ -3423,6 +4173,101 @@ document.addEventListener('click', async (e)=>{
     }
     case 'unlinkExcReport': { state.excFormDraft.linkedReportId = null; render(); break; }
 
+    /* ---- Damages (נזקים) ---- */
+    case 'newDamage': { state.dmgFormDraft=null; go({name:'damageForm'}); break; }
+    case 'editDamage': { state.dmgFormDraft=null; go({name:'damageForm', editId: action.getAttribute('data-id')}); break; }
+    case 'deleteDamage': {
+      const id = action.getAttribute('data-id');
+      if(await showConfirm('למחוק את הנזק? פעולה זו בלתי הפיכה.', {danger:true, okLabel:'מחיקה'})){
+        DB.damages = DB.damages.filter(x=>x.id!==id);
+        await saveCollection('damages');
+        toast('הנזק נמחק');
+        go({name:'damages'});
+      }
+      break;
+    }
+    case 'setDmgStatusFilter': { state.dmgFilters.status = action.getAttribute('data-status')||''; render(); break; }
+    case 'removeDmgPhoto': {
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      if(state.dmgFormDraft && state.dmgFormDraft.photos) state.dmgFormDraft.photos.splice(idx,1);
+      render();
+      break;
+    }
+    case 'openDmgCategoryPicker': openDmgCategoryPicker(); break;
+    case 'openDmgQuickAddCategory': openDmgQuickAddCategory(); break;
+    case 'selectDmgCategory': { state.dmgFormDraft.categoryId = action.getAttribute('data-id'); closeModal(); break; }
+    case 'deleteDmgCategoryFromPicker': {
+      const id = action.getAttribute('data-id');
+      await requestEntityDelete('damageCategories', id);
+      renderDmgCategoryPickerModal();
+      break;
+    }
+    case 'openDmgLocationPicker': openDmgLocationPicker(); break;
+    case 'dmgLocDrill': { state._dmgLocPath.push(action.getAttribute('data-id')); renderDmgLocationPickerModal(); break; }
+    case 'dmgLocUp': { state._dmgLocPath.pop(); renderDmgLocationPickerModal(); break; }
+    case 'dmgLocRoot': { state._dmgLocPath = []; renderDmgLocationPickerModal(); break; }
+    case 'dmgLocAdd': {
+      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1, חדר משרדי הנהלה');
+      if(name && name.trim()){
+        const parentId = state._dmgLocPath.length ? state._dmgLocPath[state._dmgLocPath.length-1] : null;
+        const siblingCount = DB.exceptionLocations.filter(x=>x.parentId===parentId).length;
+        DB.exceptionLocations.push({id:uid(), name:name.trim(), parentId, active:true, order:siblingCount, createdAt:Date.now()});
+        await saveCollection('exceptionLocations');
+      }
+      renderDmgLocationPickerModal();
+      break;
+    }
+    case 'dmgLocDelete': {
+      const id = action.getAttribute('data-id');
+      const hasKids = DB.exceptionLocations.some(x=>x.parentId===id && x.active);
+      if(hasKids){ toast('לא ניתן למחוק מיקום שיש לו תתי-מיקום — מחק קודם אותם'); break; }
+      const used = isEntityUsed('exceptionLocations', id);
+      const msg = used ? 'המיקום בשימוש בחריגים/נזקים קיימים. למחוק בכל זאת?' : 'למחוק את תת-המיקום?';
+      if(await showConfirm(msg, {danger:true, okLabel:'מחיקה'})){
+        DB.exceptionLocations = DB.exceptionLocations.filter(x=>x.id!==id);
+        await saveCollection('exceptionLocations');
+        state._dmgLocPath = state._dmgLocPath.filter(x=>x!==id);
+      }
+      renderDmgLocationPickerModal();
+      break;
+    }
+    case 'dmgLocConfirm': {
+      const path = state._dmgLocPath.slice();
+      if(path.length){
+        if(!state.dmgFormDraft.locationPaths) state.dmgFormDraft.locationPaths = [];
+        state.dmgFormDraft.locationPaths.push(path);
+      }
+      closeModal();
+      break;
+    }
+    case 'removeDmgLocationPath': {
+      const idx = parseInt(action.getAttribute('data-idx'),10);
+      state.dmgFormDraft.locationPaths.splice(idx,1);
+      render();
+      break;
+    }
+    case 'openDmgLinkPicker': openDmgLinkPicker(action.getAttribute('data-field')); break;
+    case 'linkDmgReport': {
+      state.dmgFormDraft[state._dmgLinkField] = action.getAttribute('data-id');
+      closeModal();
+      break;
+    }
+    case 'unlinkDmgReport': { state.dmgFormDraft[action.getAttribute('data-field')] = null; render(); break; }
+    case 'addDmgUpdate': {
+      if(!state.dmgFormDraft.updates) state.dmgFormDraft.updates = [];
+      state.dmgFormDraft.updates.push({id:uid(), date:todayStr(), label:'', text:''});
+      render();
+      break;
+    }
+    case 'removeDmgUpdate': {
+      const id = action.getAttribute('data-id');
+      state.dmgFormDraft.updates = state.dmgFormDraft.updates.filter(u=>u.id!==id);
+      render();
+      break;
+    }
+    case 'openDamageExport': openExportModal('damages'); break;
+    case 'exportSingleDamagePdf': exportSingleDamagePdf(action.getAttribute('data-id')); break;
+
     case 'toggleFilterPanel': state._filterPanelOpen = !state._filterPanelOpen; render(); break;
     case 'clearFilters': {
       state.historyFilters = { text:"", dateFrom:"", dateTo:"", workerIds:[], categoryId:"", workTypeId:"", locationId:"", hoursMin:"", hoursMax:"", qtyMin:"", qtyMax:"" };
@@ -3654,6 +4499,21 @@ document.addEventListener('change', async (e)=>{
     }
     render();
   }
+  if(e.target.classList && e.target.classList.contains('dmgPhotoInput')){
+    const files = Array.from(e.target.files || []);
+    for(const file of files){
+      const dataUrl = await compressImage(file);
+      if(!state.dmgFormDraft.photos) state.dmgFormDraft.photos = [];
+      state.dmgFormDraft.photos.push({src:dataUrl, note:''});
+    }
+    render();
+  }
+  if(e.target.closest && e.target.closest('#damageForm') && e.target.tagName==='SELECT'){
+    const draft = state.dmgFormDraft;
+    const name = e.target.name;
+    if(name) draft[name] = e.target.value;
+    render();
+  }
   if(e.target.classList && e.target.classList.contains('docInput')){
     const holder = e.target.getAttribute('data-holder');
     const files = Array.from(e.target.files || []);
@@ -3727,6 +4587,34 @@ document.addEventListener('input', (e)=>{
   }
   if(e.target.id==='taskTitleInput' && state.taskFormDraft){
     state.taskFormDraft.title = e.target.value;
+  }
+  // live-sync for the damage form — same reasoning as the exception form above: without this,
+  // opening/closing any picker (category, location, link-to-report…) re-renders the form and
+  // would wipe anything typed but not yet saved into the draft.
+  if(e.target.closest('#damageForm')){
+    const draft = state.dmgFormDraft;
+    const name = e.target.name;
+    if(name) draft[name] = e.target.value;
+  }
+  if(e.target.hasAttribute('data-dmg-photo-note')){
+    const idx = parseInt(e.target.getAttribute('data-dmg-photo-note'),10);
+    if(state.dmgFormDraft && state.dmgFormDraft.photos[idx]) state.dmgFormDraft.photos[idx].note = e.target.value;
+  }
+  if(e.target.hasAttribute('data-dmg-update-id')){
+    const updId = e.target.getAttribute('data-dmg-update-id');
+    const field = e.target.getAttribute('data-dmg-update-field');
+    const u = (state.dmgFormDraft.updates||[]).find(x=>x.id===updId);
+    if(u && field) u[field] = e.target.value;
+  }
+  if(e.target.id==='dmgSearch'){
+    state.dmgFilters.search = e.target.value;
+    clearTimeout(document._dmgSearchT);
+    document._dmgSearchT = setTimeout(()=>{
+      const cursorPos = e.target.selectionStart;
+      render();
+      const el = document.getElementById('dmgSearch');
+      if(el){ el.focus(); el.setSelectionRange(cursorPos, cursorPos); }
+    }, 250);
   }
 });
 
