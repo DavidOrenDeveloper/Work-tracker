@@ -195,8 +195,8 @@ select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns=
 .doclink .sub{color:var(--text-faint);font-size:11px;}
 .dialog-msg{font-size:14.5px;color:var(--text-dim);line-height:1.6;}
 .dialog-input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:15px;background:var(--surface);color:var(--text);}
-.lightbox-overlay{background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:0;}
-.lightbox-img{max-width:96vw;max-height:92vh;object-fit:contain;border-radius:6px;}
+.lightbox-overlay{background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;}
+.lightbox-img{max-width:96vw;max-height:92vh;object-fit:contain;border-radius:6px;touch-action:none;will-change:transform;}
 .lightbox-close{position:fixed;top:calc(14px + env(safe-area-inset-top));left:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;}
 .imgpreview .thumb, .imgpreview-row .thumb{cursor:pointer;}
 
@@ -2419,7 +2419,9 @@ function dmgTreatmentField(){
     <select name="treatmentStatus">
       ${DMG_TREATMENT_OPTIONS.map(o=>`<option value="${o.val}" ${draft.treatmentStatus===o.val?'selected':''}>${esc(o.label)}</option>`).join('')}
     </select>
-    ${draft.treatmentStatus==='other' ? `<input type="text" name="treatmentOther" placeholder="פרט…" value="${esc(draft.treatmentOther)}" style="margin-top:8px;">` : ''}
+    <div class="dmg-other-wrap" data-for="treatmentStatus" style="display:${draft.treatmentStatus==='other'?'block':'none'};margin-top:8px;">
+      <input type="text" name="treatmentOther" placeholder="פרט…" value="${esc(draft.treatmentOther)}">
+    </div>
     <textarea name="treatmentNotes" placeholder="פירוט הטיפול שבוצע (אופציונלי)…" style="margin-top:8px;">${esc(draft.treatmentNotes)}</textarea>
   </div>`;
 }
@@ -2430,7 +2432,9 @@ function dmgFollowUpField(){
     <select name="followUpStatus">
       ${DMG_FOLLOWUP_OPTIONS.map(o=>`<option value="${o.val}" ${draft.followUpStatus===o.val?'selected':''}>${esc(o.label)}</option>`).join('')}
     </select>
-    ${draft.followUpStatus==='other' ? `<input type="text" name="followUpOther" placeholder="פרט…" value="${esc(draft.followUpOther)}" style="margin-top:8px;">` : ''}
+    <div class="dmg-other-wrap" data-for="followUpStatus" style="display:${draft.followUpStatus==='other'?'block':'none'};margin-top:8px;">
+      <input type="text" name="followUpOther" placeholder="פרט…" value="${esc(draft.followUpOther)}">
+    </div>
   </div>`;
 }
 function dmgLinkField(field, label, placeholder){
@@ -3703,14 +3707,98 @@ function showPrompt(title, defaultValue, placeholder){
   });
 }
 
-/* ---- Full-screen image viewer (lightbox) ---- */
+/* ---- Full-screen image viewer (lightbox), with pinch-to-zoom / double-tap-to-zoom / pan ---- */
 function openImageViewer(src){
   pushModalHistory();
   const html = `<div class="overlay lightbox-overlay" id="lightboxOverlay" data-action="closeModal">
-    <img src="${src}" class="lightbox-img" data-action="noop">
+    <img src="${src}" class="lightbox-img" id="lightboxImg" data-action="noop">
     <button type="button" class="lightbox-close" data-action="closeModal">✕</button>
   </div>`;
   document.getElementById('modalRoot').innerHTML = html;
+  initLightboxZoom(document.getElementById('lightboxImg'));
+}
+function initLightboxZoom(img){
+  let scale = 1, tx = 0, ty = 0;
+  let startDist = 0, startScale = 1;
+  let panning = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+  let lastTapTime = 0;
+  const MIN_SCALE = 1, MAX_SCALE = 5;
+
+  function apply(withTransition){
+    img.style.transition = withTransition ? 'transform 0.2s ease-out' : 'none';
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }
+  function dist(touches){
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+  function clampPan(){
+    // simple clamp so the image can't be dragged completely off-screen
+    const maxOffset = (scale-1) * Math.max(img.clientWidth, img.clientHeight) * 0.6 + 40;
+    tx = Math.max(-maxOffset, Math.min(maxOffset, tx));
+    ty = Math.max(-maxOffset, Math.min(maxOffset, ty));
+  }
+  function resetZoom(){ scale=1; tx=0; ty=0; apply(true); }
+
+  img.addEventListener('touchstart', (e)=>{
+    if(e.touches.length===2){
+      startDist = dist(e.touches);
+      startScale = scale;
+      panning = false;
+    } else if(e.touches.length===1){
+      if(scale>1){
+        panning = true;
+        panStartX = e.touches[0].clientX; panStartY = e.touches[0].clientY;
+        panOrigX = tx; panOrigY = ty;
+      }
+      const now = Date.now();
+      if(now - lastTapTime < 300){
+        // double tap
+        if(scale>1){ resetZoom(); } else { scale=2.5; apply(true); }
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+      }
+    }
+  }, {passive:true});
+
+  img.addEventListener('touchmove', (e)=>{
+    if(e.touches.length===2){
+      e.preventDefault();
+      const newDist = dist(e.touches);
+      if(startDist>0){
+        scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, startScale * (newDist/startDist)));
+        clampPan();
+        apply(false);
+      }
+    } else if(e.touches.length===1 && panning){
+      e.preventDefault();
+      tx = panOrigX + (e.touches[0].clientX - panStartX);
+      ty = panOrigY + (e.touches[0].clientY - panStartY);
+      clampPan();
+      apply(false);
+    }
+  }, {passive:false});
+
+  img.addEventListener('touchend', (e)=>{
+    if(e.touches.length<2) startDist = 0;
+    if(e.touches.length===0){
+      panning = false;
+      if(scale < 1.05) resetZoom();
+    }
+  });
+
+  // desktop convenience: mouse wheel to zoom, double-click to reset/zoom
+  img.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale - e.deltaY*0.0015));
+    clampPan();
+    apply(false);
+  }, {passive:false});
+  img.addEventListener('dblclick', ()=>{
+    if(scale>1){ resetZoom(); } else { scale=2.5; apply(true); }
+  });
 }
 
 /* ============================== EVENT HANDLING ============================== */
@@ -4512,7 +4600,10 @@ document.addEventListener('change', async (e)=>{
     const draft = state.dmgFormDraft;
     const name = e.target.name;
     if(name) draft[name] = e.target.value;
-    render();
+    // Toggle the matching "אחר" text field in place — no full re-render here, since that
+    // would replace #app and reset scroll to the top of the (long) damage form.
+    const wrap = e.target.closest('.field') && e.target.closest('.field').querySelector(`.dmg-other-wrap[data-for="${name}"]`);
+    if(wrap) wrap.style.display = e.target.value==='other' ? 'block' : 'none';
   }
   if(e.target.classList && e.target.classList.contains('docInput')){
     const holder = e.target.getAttribute('data-holder');
