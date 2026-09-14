@@ -149,10 +149,12 @@ input.hm-input{direction:ltr;text-align:right;}
 /* Fixes the classic Hebrew-RTL "typed ( shows as )" mirroring: plaintext bidi resolves each
    line's direction from its own strong characters instead of forcing the browser's global RTL
    mirroring rules onto neutral characters like parentheses. */
-/* direction:rtl is set explicitly here (not just inherited from <html dir="rtl">) — combining
-   unicode-bidi:plaintext with an inherited direction is what caused the visual bug where
-   Hebrew typed into a field (e.g. the location search box) showed up reversed. */
-input[type=text], input[type=search], textarea, .task-editor{ unicode-bidi: plaintext; direction: rtl; }
+/* Explicit direction:rtl (not just inherited from <html dir="rtl">), and crucially NO
+   unicode-bidi:plaintext — that mode determines the field's base direction from its own
+   text content (per the Unicode Bidi Algorithm), overriding the direction property entirely.
+   That combination is exactly what caused Hebrew typed into a field (e.g. location search)
+   to render reversed. Plain direction:rtl is the standard, reliable fix. */
+input[type=text], input[type=search], textarea, .task-editor{ direction: rtl; }
 textarea{resize:vertical;min-height:64px;}
 select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -1127,7 +1129,12 @@ function renderWorkerPickerModal(search){
   const html = `
     <div class="overlay" id="workerModalOverlay">
       <div class="sheet">
-        <div class="sheet-head"><h3>בחירת עובדים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="sheet-head"><h3>בחירת עובדים</h3>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${draft.workerIds.length})</button>
+            <button class="closebtn" data-action="closeModal">✕</button>
+          </div>
+        </div>
         <input type="search" class="search-in-modal" id="workerSearchInput" placeholder="חיפוש עובד…" value="${esc(search)}">
         <div id="workerListWrap">
           ${workers.length===0 ? `<div class="empty"><div class="ic">👤</div>אין עובדים פעילים תואמים</div>` :
@@ -1286,7 +1293,12 @@ function renderWorkTypePickerModal(search){
   const html = `
     <div class="overlay" id="workTypeModalOverlay">
       <div class="sheet">
-        <div class="sheet-head"><h3>בחירת סוגי עבודה</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="sheet-head"><h3>בחירת סוגי עבודה</h3>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${draft.workTypeIds.length})</button>
+            <button class="closebtn" data-action="closeModal">✕</button>
+          </div>
+        </div>
         <input type="search" class="search-in-modal" id="workTypeSearchInput" placeholder="חיפוש סוג עבודה…" value="${esc(search)}">
         <div id="workTypeListWrap">
           ${wts.length===0 ? `<div class="empty"><div class="ic">🏷</div>אין סוגי עבודה תואמים</div>` :
@@ -1325,7 +1337,12 @@ function renderLocationPickerModal(search){
   const html = `
     <div class="overlay" id="locationModalOverlay">
       <div class="sheet">
-        <div class="sheet-head"><h3>בחירת מיקומים / אזורים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+        <div class="sheet-head"><h3>בחירת מיקומים / אזורים</h3>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${draft.locationIds.length + draft.locationTexts.length})</button>
+            <button class="closebtn" data-action="closeModal">✕</button>
+          </div>
+        </div>
         <input type="search" class="search-in-modal" id="locationSearchInput" placeholder="חיפוש מיקום…" value="${esc(search)}">
         <div id="locationListWrap">
           ${locs.length===0 ? `<div class="empty"><div class="ic">📍</div>אין מיקומים תואמים</div>` :
@@ -1654,7 +1671,12 @@ function renderHistoryWorkerPickerModal(search){
   const workers = DB.workers.filter(w=>smartMatch(w.name, search));
   const html = `<div class="overlay" id="workerModalOverlay">
     <div class="sheet">
-      <div class="sheet-head"><h3>סינון לפי עובדים</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+      <div class="sheet-head"><h3>סינון לפי עובדים</h3>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${f.workerIds.length})</button>
+          <button class="closebtn" data-action="closeModal">✕</button>
+        </div>
+      </div>
       <input type="search" class="search-in-modal" id="workerSearchInput" placeholder="חיפוש עובד…" value="${esc(search)}">
       ${workers.map(w=>{
         const checked = f.workerIds.includes(w.id);
