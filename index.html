@@ -149,7 +149,10 @@ input.hm-input{direction:ltr;text-align:right;}
 /* Fixes the classic Hebrew-RTL "typed ( shows as )" mirroring: plaintext bidi resolves each
    line's direction from its own strong characters instead of forcing the browser's global RTL
    mirroring rules onto neutral characters like parentheses. */
-input[type=text], input[type=search], textarea, .task-editor{ unicode-bidi: plaintext; }
+/* direction:rtl is set explicitly here (not just inherited from <html dir="rtl">) — combining
+   unicode-bidi:plaintext with an inherited direction is what caused the visual bug where
+   Hebrew typed into a field (e.g. the location search box) showed up reversed. */
+input[type=text], input[type=search], textarea, .task-editor{ unicode-bidi: plaintext; direction: rtl; }
 textarea{resize:vertical;min-height:64px;}
 select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235d6670'><path d='M5 8l5 5 5-5z'/></svg>");background-repeat:no-repeat;background-position:left 10px center;padding-left:32px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -2187,6 +2190,17 @@ async function openExcQuickAddCategory(){
 }
 
 /* ---- exception hierarchical location picker (unlimited nesting, user-defined) ---- */
+// Renaming a location node is always safe: exceptions/damages/tasks all reference it by id,
+// never by name, so a rename can never "break" or orphan anything already saved.
+async function renameLocationNode(id){
+  const n = byId(DB.exceptionLocations, id);
+  if(!n) return;
+  const name = await showPrompt('שם המיקום', n.name, 'שם המיקום');
+  if(name===null || !name.trim()) return;
+  n.name = name.trim();
+  await saveCollection('exceptionLocations');
+  toast('שם המיקום עודכן');
+}
 function openExcLocationPicker(target){
   pushModalHistory();
   state._locPickerTarget = target || 'excFormDraft';
@@ -2217,6 +2231,7 @@ function renderExcLocationPickerModal(){
                   <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="up">▲</button>
                   <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="down">▼</button>
                 </div>
+                <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 10px;" data-action="excLocEdit" data-id="${n.id}">✏️</button>
                 <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="excLocDelete" data-id="${n.id}">🗑</button>
               </div>`;
             }).join('')}
@@ -2704,6 +2719,7 @@ function renderDmgLocationPickerModal(){
                   <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="up">▲</button>
                   <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="down">▼</button>
                 </div>
+                <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 10px;" data-action="dmgLocEdit" data-id="${n.id}">✏️</button>
                 <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="dmgLocDelete" data-id="${n.id}">🗑</button>
               </div>`;
             }).join('')}
@@ -4248,6 +4264,8 @@ document.addEventListener('click', async (e)=>{
       renderExcLocationPickerModal();
       break;
     }
+    case 'excLocEdit': { await renameLocationNode(action.getAttribute('data-id')); renderExcLocationPickerModal(); break; }
+    case 'dmgLocEdit': { await renameLocationNode(action.getAttribute('data-id')); renderDmgLocationPickerModal(); break; }
     case 'excLocConfirm': {
       const target = state._locPickerTarget || 'excFormDraft';
       state[target].locationPathIds = state._excLocPath.slice();
