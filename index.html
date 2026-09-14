@@ -834,7 +834,6 @@ function render(){
   else if(r.name==='locunits') html = viewLocationsUnits();
   else if(r.name==='settings') html = viewSettings();
   app.innerHTML = (storageStatus.healthy ? '' : storageBanner()) + html + bottomNav();
-  window.scrollTo(0,0);
 }
 function storageBanner(){
   return `<div class="storagewarn">⚠️ שמירה אוטומטית לא זמינה כרגע — הנתונים פעילים בזיכרון זמני של המסך ועלולים להימחק אם תסגור את האפליקציה.
@@ -850,6 +849,7 @@ function go(routeObj){
   try{ history.pushState({nav:true}, '', location.href); }catch(e){}
   state.route = routeObj;
   render();
+  window.scrollTo(0,0); // real navigation to a (new) screen — start at the top
 }
 function pushModalHistory(){
   navStack.push({kind:'modal'});
@@ -869,6 +869,7 @@ window.addEventListener('popstate', ()=>{
   } else if(entry.kind==='route'){
     state.route = entry.route;
     render();
+    window.scrollTo(0,0); // back-navigated to a previous screen — start at the top there too
   }
 });
 
