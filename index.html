@@ -436,6 +436,44 @@ function toast(msg){
   clearTimeout(toast._t);
   toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
 }
+
+/* ============================== VERSION / UPDATE CHECK ==============================
+   Bump APP_VERSION here AND the "version" value in version.json on every release.
+   The app polls version.json (with cache-busting, no-store) and — if it differs from
+   APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
+   screen in Settings. This is the only reliable signal, since the phone/browser can
+   otherwise silently keep serving an old cached copy. */
+const APP_VERSION = "1.0.0";
+let _lastCheckedVersion = null;
+async function checkForUpdate(manual=false){
+  try{
+    const res = await fetch('./version.json?t=' + Date.now(), {cache:'no-store'});
+    const data = await res.json();
+    _lastCheckedVersion = (data && data.version) ? data.version : null;
+    if(_lastCheckedVersion && _lastCheckedVersion !== APP_VERSION){
+      showUpdateBanner(_lastCheckedVersion);
+    } else if(manual){
+      toast('אתה מעודכן לגרסה האחרונה (' + APP_VERSION + ')');
+    }
+  }catch(err){
+    if(manual) toast('לא ניתן לבדוק עדכון כרגע (אין רשת?)');
+  }
+}
+function showUpdateBanner(newVersion){
+  if(document.getElementById('updateBanner')) return;
+  const b = document.createElement('div');
+  b.id = 'updateBanner';
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1f2937;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;direction:rtl;font-size:14px;box-shadow:0 -2px 10px rgba(0,0,0,.25);';
+  b.innerHTML = `<span>גרסה חדשה (${newVersion}) זמינה</span><button id="updateBannerBtn" style="background:#d98a12;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;">רענן עכשיו</button>`;
+  document.body.appendChild(b);
+  document.getElementById('updateBannerBtn').addEventListener('click', ()=>{
+    location.reload();
+  });
+}
+window.addEventListener('load', ()=>checkForUpdate());
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') checkForUpdate(); });
+setInterval(()=>checkForUpdate(), 60000);
+
 function weekRange(dateStr){
   const d = new Date(dateStr+"T00:00:00");
   const day = d.getDay(); // 0=Sun
@@ -956,7 +994,7 @@ function viewHome(){
         <div class="field" style="margin-bottom:0;"><label>בחר תאריך בתקופה</label><input type="date" id="dashPeriodDate" value="${p.date}"></div>
       </div>`}
     <div class="dash">
-      <div class="dash-label">${periodLabel} · ${fmtDateHe(start)} – ${fmtDateHe(end)}</div>
+      <div class="dash-label">${periodLabel}${(p.type!=='custom'||(p.from&&p.to)) ? ` · ${fmtDateHe(start)} – ${fmtDateHe(end)}` : ''}</div>
       <div class="dash-grid">
         <div class="dash-item"><div class="dash-num">🕐 ${fmtHM(hours)}</div><div class="dash-sub">שעות</div></div>
         <div class="dash-item"><div class="dash-num">⚠️ ${periodExceptions.length}</div><div class="dash-sub">חריגים</div></div>
@@ -1152,8 +1190,10 @@ function renderWorkerPickerModal(search){
     </div>`;
   setModalHtml(html);
   document.getElementById('workerSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
     renderWorkerPickerModal(e.target.value);
-    document.getElementById('workerSearchInput').focus();
+    const el = document.getElementById('workerSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
   });
 }
 
@@ -1323,8 +1363,10 @@ function renderWorkTypePickerModal(search){
     </div>`;
   setModalHtml(html);
   document.getElementById('workTypeSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
     renderWorkTypePickerModal(e.target.value);
-    document.getElementById('workTypeSearchInput').focus();
+    const el = document.getElementById('workTypeSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
   });
   updateSplitSum('workType');
 }
@@ -1377,8 +1419,10 @@ function renderLocationPickerModal(search){
     </div>`;
   setModalHtml(html);
   document.getElementById('locationSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
     renderLocationPickerModal(e.target.value);
-    document.getElementById('locationSearchInput').focus();
+    const el = document.getElementById('locationSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
   });
   const freeInput = document.getElementById('freeLocationInput');
   if(freeInput){
@@ -1687,7 +1731,12 @@ function renderHistoryWorkerPickerModal(search){
       <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${f.workerIds.length} נבחרו)</button>
     </div></div>`;
   setModalHtml(html);
-  document.getElementById('workerSearchInput').addEventListener('input', e=>renderHistoryWorkerPickerModal(e.target.value));
+  document.getElementById('workerSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
+    renderHistoryWorkerPickerModal(e.target.value);
+    const el = document.getElementById('workerSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
+  });
 }
 function openSortPicker(){
   pushModalHistory();
@@ -2308,8 +2357,10 @@ function renderExcLinkReportPickerModal(search){
     </div>`;
   setModalHtml(html);
   document.getElementById('excLinkReportSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
     renderExcLinkReportPickerModal(e.target.value);
-    document.getElementById('excLinkReportSearchInput').focus();
+    const el = document.getElementById('excLinkReportSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
   });
 }
 
@@ -2804,8 +2855,10 @@ function renderDmgLinkPickerModal(search){
     </div>`;
   setModalHtml(html);
   document.getElementById('dmgLinkSearchInput').addEventListener('input', e=>{
+    const pos = e.target.selectionStart;
     renderDmgLinkPickerModal(e.target.value);
-    document.getElementById('dmgLinkSearchInput').focus();
+    const el = document.getElementById('dmgLinkSearchInput');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
   });
 }
 
@@ -3151,8 +3204,12 @@ function viewSettings(){
     </div>
     <div class="section-title">אודות</div>
     <div class="card small-note">
-      יומן עבודה — מערכת ניהול ומעקב עבודות אתר. גרסת MVP.<br>
+      יומן עבודה — מערכת ניהול ומעקב עבודות אתר.<br>
+      גרסה מותקנת: <b>${APP_VERSION}</b><br>
       נתונים נשמרים באופן פרטי בחשבונך בלבד.
+      <div class="btnrow" style="margin-top:10px;">
+        <button class="btn btn-outline btn-sm" data-action="manualCheckUpdate">🔄 בדוק אם יש עדכון</button>
+      </div>
     </div>
   `;
 }
@@ -4017,6 +4074,7 @@ document.addEventListener('click', async (e)=>{
     case 'doExportPdf': doExportPdf(); break;
     case 'closeModal': closeModal(); break;
     case 'noop': break;
+    case 'manualCheckUpdate': checkForUpdate(true); break;
     case 'dialogResolve': {
       const val = action.getAttribute('data-val')==='ok';
       const resolve = state._dialogResolve;
@@ -4682,7 +4740,12 @@ document.addEventListener('change', async (e)=>{
     const file = e.target.files[0];
     if(file) importBackupFile(file);
   }
-  if(e.target.id==='emSearch'){ em.search = e.target.value; render(); document.getElementById('emSearch').focus(); }
+  if(e.target.id==='emSearch'){
+    const pos = e.target.selectionStart;
+    em.search = e.target.value; render();
+    const el = document.getElementById('emSearch');
+    if(el){ el.focus(); el.setSelectionRange(pos,pos); }
+  }
 });
 
 document.addEventListener('input', (e)=>{

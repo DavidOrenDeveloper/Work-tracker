@@ -15,5 +15,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
+  // Navigation / document requests (i.e. loading index.html itself) must NEVER be
+  // served from any HTTP cache layer, or updates won't be visible after a refresh.
+  if(event.request.mode === 'navigate' || event.request.destination === 'document'){
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+  } else {
+    event.respondWith(fetch(event.request));
+  }
 });
