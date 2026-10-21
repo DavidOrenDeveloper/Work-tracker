@@ -330,6 +330,45 @@ a{color:var(--amber);}
 .dmg-hist-row{display:flex;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border-soft);font-size:12.5px;}
 .dmg-hist-row:last-child{border-bottom:none;}
 .dmg-hist-date{color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;white-space:nowrap;}
+
+/* ---- plans + marks viewer ---- */
+.pvroot{position:fixed;inset:0;z-index:150;background:#16181c;display:flex;flex-direction:column;color:#fff;direction:rtl;font-family:inherit;}
+.pvhead{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 8px;background:#202328;}
+.pvhead .t{flex:1;min-width:0;}
+.pvhead h2{font-size:15px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pvhead .s{font-size:11px;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pvbtn{background:#33373d;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;cursor:pointer;}
+.pvbtn.primary{background:var(--amber);color:#1a1400;font-weight:800;}
+.pvstage{position:relative;flex:1;overflow:hidden;touch-action:none;background:#2b2e33;user-select:none;-webkit-user-select:none;direction:ltr;}
+.pvworld{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;}
+.pvworld img{display:block;max-width:none;pointer-events:none;-webkit-user-drag:none;background:#fff;}
+.pvworld svg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;}
+.pvchips{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.pvchip{position:absolute;min-width:26px;height:26px;border-radius:13px;background:var(--c);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.55);padding:0 6px;box-sizing:border-box;}
+.pvchip.pin{transform:translate(-50%,calc(-100% - 8px));}
+.pvchip.pin::after{content:"";position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);border:5px solid transparent;border-top:8px solid var(--c);border-bottom:0;}
+.pvchip.area{transform:translate(-50%,-50%);}
+.pvchip.cur{box-shadow:0 0 0 4px #fff,0 0 0 7px var(--c);}
+.pvchip.faint{min-width:10px;width:10px;height:10px;padding:0;font-size:0;border-width:1px;opacity:.55;}
+.pvchip.faint::after{display:none;}
+.pvpanel{background:#202328;padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 10px);max-height:46vh;overflow:auto;}
+.pvtools{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+.pvtool{background:#33373d;color:#fff;border:2px solid transparent;border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-family:inherit;cursor:pointer;}
+.pvtool .i{font-size:20px;line-height:1.1;}
+.pvtool.on{border-color:var(--amber);background:#4a3a14;}
+.pvhint{font-size:12.5px;line-height:1.45;margin:8px 2px 4px;color:#e9e3d2;}
+.pvdim{font-size:12px;opacity:.7;margin:6px 2px;}
+.pvcur{margin-top:6px;background:#2a2e34;border-radius:10px;padding:8px;}
+.pvnote{width:100%;box-sizing:border-box;margin:6px 0;padding:9px 10px;border-radius:8px;border:1px solid #444;background:#16181c;color:#fff;font-size:14px;font-family:inherit;}
+.pvbtns{display:flex;gap:6px;flex-wrap:wrap;}
+.pvbtns button{flex:1;min-width:90px;background:#3a3f46;color:#fff;border:0;border-radius:8px;padding:9px 6px;font-size:13px;font-family:inherit;cursor:pointer;}
+.pvbtns button.danger{background:#6b2424;}
+.pvfils{display:flex;gap:6px;flex-wrap:wrap;}
+.pvfil{background:#33373d;color:#fff;border:2px solid var(--c);border-radius:999px;padding:6px 12px;font-size:12.5px;font-family:inherit;opacity:.45;cursor:pointer;}
+.pvfil.on{opacity:1;background:var(--c);}
+.pvcard{margin-top:8px;background:#2a2e34;border-radius:10px;padding:10px;font-size:13.5px;line-height:1.5;}
+.pvrow{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:6px 2px;}
+.pvrow input[type=range]{flex:1;}
 </style>
 </head>
 <body>
@@ -443,7 +482,7 @@ function toast(msg){
    APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
    screen in Settings. This is the only reliable signal, since the phone/browser can
    otherwise silently keep serving an old cached copy. */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.2.0";
 let _lastCheckedVersion = null;
 async function checkForUpdate(manual=false){
   try{
@@ -524,8 +563,8 @@ function readFileAsDataURL(file){
 }
 
 /* ============================== STORAGE LAYER ============================== */
-const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks","taskCategories","damageCategories","damages"];
-const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[], taskCategories:[], damageCategories:[], damages:[] };
+const COLLECTIONS = ["workers","categories","workTypes","locations","units","reports","exceptionCategories","exceptionLocations","exceptions","tasks","taskCategories","damageCategories","damages","plans"];
+const DB = { workers:[], categories:[], workTypes:[], locations:[], units:[], reports:[], exceptionCategories:[], exceptionLocations:[], exceptions:[], tasks:[], taskCategories:[], damageCategories:[], damages:[], plans:[] };
 
 /* Fully standalone, offline-capable persistence — no server, no account,
    no external APIs. Primary store is IndexedDB (large capacity, works
@@ -703,6 +742,19 @@ function migrateReportsSchema(){
     if(!Array.isArray(d.updates)){ d.updates = []; dmgChanged = true; }
     if(!Array.isArray(d.history)){ d.history = [{at:d.createdAt||Date.now(), type:'created', text:'הנזק נוצר ותועד'}]; dmgChanged = true; }
   });
+  // Old flat locations list -> becomes top-level nodes of the shared nested tree. Ids are kept, so
+  // every existing report's locationIds keeps pointing at the same place. Runs once (list is emptied).
+  if(Array.isArray(DB.locations) && DB.locations.length){
+    const roots = DB.exceptionLocations.filter(x=>!x.parentId);
+    let next = roots.length ? Math.max(...roots.map(x=>x.order??0))+1 : 0;
+    DB.locations.slice().sort((a,b)=>(a.order??0)-(b.order??0)).forEach(l=>{
+      if(byId(DB.exceptionLocations,l.id)) return;
+      DB.exceptionLocations.push({id:l.id, name:l.name, parentId:null, active:l.active!==false, order:next++, createdAt:l.createdAt||Date.now()});
+    });
+    DB.locations = [];
+    saveCollection('exceptionLocations');
+    saveCollection('locations');
+  }
   if(changed) saveCollection('reports');
   if(excChanged) saveCollection('exceptions');
   if(taskChanged) saveCollection('tasks');
@@ -740,6 +792,8 @@ const state = {
   taskShowPriorityColors: true,
   taskFilterPriority: null,
   dmgFormDraft: null, // used for add/edit damage (נזק)
+  _repLocPath: [], // drill-down path in the work-report location picker (same shared tree)
+  locRollup: 0, // "by location" report detail level (0 = full path)
   _dmgLocPath: [], // drill-down path while picking a nested damage location (shares the exceptionLocations tree)
   _dmgLinkField: null, // which report-link field ('priorReportId'/'originalReportId'/'repairReportId') the picker is currently editing
   dmgFilters: { search:'', categoryId:'', status:'', causedBy:'' },
@@ -754,12 +808,84 @@ const activeOf = (arr) => arr.filter(x=>x.active).sort((a,b)=>(a.order??0)-(b.or
 const workerName = id => { const w=byId(DB.workers,id); return w? w.name : "(נמחק)"; };
 const categoryName = id => { if(!id) return "—"; const c=byId(DB.categories,id); return c? c.name : "(נמחק)"; };
 const workTypeName = id => { if(!id) return "—"; const w=byId(DB.workTypes,id); return w? w.name : "(נמחק)"; };
-const locationName = (id,text) => { if(text) return text; const l=byId(DB.locations,id); return l? l.name : (id? "(נמחק)" : "—"); };
+const locationName = (id,text) => { if(text) return text; return id ? locNodeLabel(id) : "—"; };
+/* ---- unified nested location tree (DB.exceptionLocations) — one tree shared by work reports,
+   exceptions, damages and tasks. A node = {id,name,parentId,active,order}. A report's locationIds
+   hold node ids (each id stands for the whole path above it). ---- */
+function locNodePath(id){
+  const out=[]; let cur=byId(DB.exceptionLocations,id); let guard=0;
+  while(cur && guard++<60){ out.unshift(cur); cur = cur.parentId ? byId(DB.exceptionLocations,cur.parentId) : null; }
+  return out;
+}
+const locNodeLabel = id => { if(!byId(DB.exceptionLocations,id)) return "(נמחק)"; return locNodePath(id).map(n=>n.name).join(' › '); };
+function locChildren(parentId, includeInactive){
+  return DB.exceptionLocations.filter(n=>(n.parentId||null)===(parentId||null) && (includeInactive||n.active)).sort((a,b)=>(a.order??0)-(b.order??0));
+}
+function locSubtreeIds(id){
+  const out=[id];
+  for(let i=0;i<out.length;i++){ DB.exceptionLocations.forEach(n=>{ if(n.parentId===out[i] && !out.includes(n.id)) out.push(n.id); }); }
+  return out;
+}
+function flattenLocTree(includeInactive){
+  const out=[]; const seen=new Set();
+  const walk=(parentId,depth,labels)=>{ locChildren(parentId,includeInactive).forEach(n=>{
+    if(seen.has(n.id)) return; seen.add(n.id);
+    const l=[...labels,n.name]; out.push({id:n.id,node:n,depth,label:l.join(' › ')}); walk(n.id,depth+1,l);
+  }); };
+  walk(null,0,[]);
+  return out;
+}
+// Creates a chain of nested locations from text like "קומה 1 > חדר חשמל > קיר ימני" under parentId
+// (re-using nodes that already exist at that level). Returns the id of the last (deepest) node.
+async function addLocationChain(parentId, text){
+  const parts = String(text||'').split(/\s*[>›]\s*/).map(x=>x.trim()).filter(Boolean);
+  let cur = parentId||null, leaf = null;
+  parts.forEach(name=>{
+    let n = DB.exceptionLocations.find(x=>(x.parentId||null)===cur && x.active && x.name.trim().toLowerCase()===name.toLowerCase());
+    if(!n){
+      const sib = DB.exceptionLocations.filter(x=>(x.parentId||null)===cur);
+      n = {id:uid(), name, parentId:cur, active:true, order: sib.length ? Math.max(...sib.map(x=>x.order??0))+1 : 0, createdAt:Date.now()};
+      DB.exceptionLocations.push(n);
+    }
+    cur = n.id; leaf = n.id;
+  });
+  await saveCollection('exceptionLocations');
+  return leaf;
+}
+// Deletes a location AND everything nested under it (after a confirmation that states what will go).
+async function deleteLocationNode(id){
+  const n = byId(DB.exceptionLocations,id);
+  if(!n) return false;
+  const ids = locSubtreeIds(id);
+  const kids = ids.length-1;
+  const used = ids.some(x=>isEntityUsed('exceptionLocations',x));
+  let msg = 'למחוק את "'+n.name+'"' + (kids ? ' ואת כל '+kids+' תתי-המיקומים שמתחתיו' : '') + '?';
+  if(used) msg += ' המיקום בשימוש ברשומות קיימות (דיווחים / חריגים / נזקים / משימות) — בהן יוצג "(נמחק)".';
+  if(!(await showConfirm(msg,{danger:true, okLabel:'מחיקה'}))) return false;
+  DB.exceptionLocations = DB.exceptionLocations.filter(x=>!ids.includes(x.id));
+  await saveCollection('exceptionLocations');
+  if((DB.plans||[]).some(pl=>ids.includes(pl.locationId))){ DB.plans.forEach(pl=>{ if(ids.includes(pl.locationId)) pl.locationId=''; }); saveCollection('plans'); }
+  ['_excLocPath','_dmgLocPath','_repLocPath'].forEach(k=>{ const pth=state[k]||[]; const i=pth.findIndex(x=>ids.includes(x)); if(i>=0) state[k]=pth.slice(0,i); });
+  const d = state.formDraft;
+  if(d && Array.isArray(d.locationIds)){
+    d.locationIds = d.locationIds.filter(x=>!ids.includes(x));
+    ids.forEach(x=>{ if(d.locationHours) delete d.locationHours['id:'+x]; if(d.locationQty) delete d.locationQty['id:'+x]; });
+  }
+  return true;
+}
+// "by location" report roll-up: 0 = full path, 1 = top level only (building), 2 = two levels, ...
+function locRollKey(key){
+  const depth = state.locRollup||0;
+  if(!depth || !key.startsWith('id:')) return key;
+  const pth = locNodePath(key.slice(3));
+  if(!pth.length || pth.length<=depth) return key;
+  return 'id:'+pth[depth-1].id;
+}
 const unitName = id => { if(!id) return ""; const u=byId(DB.units,id); return u? u.name : ""; };
 // Multi-value helpers: a report can now carry several work types and several locations.
 const workTypeNamesMulti = ids => (ids && ids.length) ? ids.map(workTypeName).join(', ') : "—";
 const locationNamesMulti = (ids,texts) => {
-  const names = [ ...((ids||[]).map(id=>{ const l=byId(DB.locations,id); return l? l.name : "(נמחק)"; })), ...(texts||[]) ];
+  const names = [ ...((ids||[]).map(id=>locNodeLabel(id))), ...(texts||[]) ];
   return names.length ? names.join(', ') : "—";
 };
 
@@ -805,7 +931,7 @@ function locationQtyMap(r){
 }
 function locationKeyLabel(key){
   if(key==='none') return '—';
-  if(key.startsWith('id:')){ const l = byId(DB.locations, key.slice(3)); return l ? l.name : '(נמחק)'; }
+  if(key.startsWith('id:')) return locNodeLabel(key.slice(3));
   if(key.startsWith('text:')) return key.slice(5);
   return key;
 }
@@ -842,7 +968,7 @@ function smartMatch(haystackRaw, queryRaw){
 
 function isEntityUsed(type, id){
   if(type==='exceptionCategories') return DB.exceptions.some(e=>e.categoryId===id);
-  if(type==='exceptionLocations') return DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id)) || DB.tasks.some(t=>(t.locationPathIds||[]).includes(id)) || DB.damages.some(d=>(d.locationPaths||[]).some(p=>p.includes(id)));
+  if(type==='exceptionLocations') return DB.reports.some(r=>(r.locationIds||[]).includes(id)) || DB.exceptions.some(e=>(e.locationPathIds||[]).includes(id)) || DB.tasks.some(t=>(t.locationPathIds||[]).includes(id)) || DB.damages.some(d=>(d.locationPaths||[]).some(p=>p.includes(id)));
   if(type==='taskCategories') return DB.tasks.some(t=>t.categoryId===id);
   if(type==='damageCategories') return DB.damages.some(d=>d.categoryId===id);
   return DB.reports.some(r=>{
@@ -875,6 +1001,7 @@ function render(){
   else if(r.name==='workers') html = viewEntityManager('workers');
   else if(r.name==='catwt') html = viewCategoriesWorkTypes();
   else if(r.name==='locunits') html = viewLocationsUnits();
+  else if(r.name==='plans') html = viewPlans();
   else if(r.name==='settings') html = viewSettings();
   app.innerHTML = (storageStatus.healthy ? '' : storageBanner()) + html + bottomNav();
 }
@@ -1016,7 +1143,8 @@ function viewHome(){
       <div class="tile" data-nav="workers"><span class="ic">👤</span><span class="lb">עובדים</span></div>
       <div class="tile" data-nav="catwt"><span class="ic">🏷</span><span class="lb">קטגוריות וסוגי עבודה</span></div>
       <div class="tile" data-nav="locunits"><span class="ic">📍</span><span class="lb">מיקומים ויחידות</span></div>
-      <div class="tile" data-action="openExport"><span class="ic">⭳</span><span class="lb">ייצוא Excel/PDF</span></div>
+      <div class="tile" data-nav="plans"><span class="ic">🗺</span><span class="lb">תוכניות וסימונים</span></div>
+      <div class="tile" data-action="openExport"><span class="ic">📤</span><span class="lb">ייצוא Excel/PDF</span></div>
       <div class="tile" data-nav="settings"><span class="ic">⚙</span><span class="lb">הגדרות</span></div>
     </div>
   `;
@@ -1025,7 +1153,7 @@ function viewHome(){
 /* ============================== ADD / EDIT REPORT FORM ============================== */
 function blankReport(){
   return { id:null, date: todayStr(), workerIds:[], categoryId:"", workTypeIds:[], workTypeSplitMode:'even', workTypeHours:{}, workTypeQty:{}, description:"",
-    locationIds:[], locationTexts:[], locationSplitMode:'even', locationHours:{}, locationQty:{}, hours:"", quantity:"", unitId:"", notes:"", photo:null, documents:[] };
+    locationIds:[], locationTexts:[], locationSplitMode:'even', locationHours:{}, locationQty:{}, hours:"", quantity:"", unitId:"", notes:"", photo:null, documents:[], marks:[] };
 }
 
 function viewReportForm(editId, duplicateFrom){
@@ -1101,7 +1229,7 @@ function viewReportForm(editId, duplicateFrom){
             ${(draft.locationIds.length||draft.locationTexts.length) ? 'ערוך בחירת מיקומים' : 'בחר מיקומים / אזורים…'}
           </button>
           <div class="chipset">
-            ${draft.locationIds.map(id=>{ const l=byId(DB.locations,id); return `<span class="chip">${esc(l?l.name:'(נמחק)')} <span class="x" data-action="removeLocationChip" data-id="${id}">×</span></span>`; }).join('')}
+            ${draft.locationIds.map(id=>`<span class="chip">${esc(locNodeLabel(id))} <span class="x" data-action="removeLocationChip" data-id="${id}">×</span></span>`).join('')}
             ${draft.locationTexts.map((t,i)=>`<span class="chip">${esc(t)} <span class="x" data-action="removeLocationTextChip" data-idx="${i}">×</span></span>`).join('')}
           </div>
         </div>
@@ -1142,6 +1270,8 @@ function viewReportForm(editId, duplicateFrom){
                  <label class="btn btn-outline btn-sm photo-btn" style="text-align:center;">🖼 בחירה מהגלריה<input type="file" accept="image/*" id="photoInputGallery" style="display:none;"></label>
                </div>`}
         </div>
+
+        ${marksFieldHtml('report')}
 
         ${documentsField('formDraft')}
       </div>
@@ -1371,38 +1501,64 @@ function renderWorkTypePickerModal(search){
   updateSplitSum('workType');
 }
 
-/* ============================== LOCATION PICKER MODAL (multi-select + free text) ============================== */
-function openLocationPicker(){ pushModalHistory(); renderLocationPickerModal(""); }
+/* ============================== LOCATION PICKER MODAL (nested tree, multi-select + free text) ============================== */
+function openLocationPicker(){
+  pushModalHistory();
+  const d = state.formDraft;
+  // open inside the parent of the first chosen location, so adding a neighbour is quick
+  const first = d.locationIds.length ? locNodePath(d.locationIds[0]) : [];
+  state._repLocPath = first.length>1 ? first.slice(0,-1).map(n=>n.id) : [];
+  renderLocationPickerModal("");
+}
 function renderLocationPickerModal(search){
   const draft = state.formDraft;
-  const locs = activeOf(DB.locations).filter(l => smartMatch(l.name, search));
+  search = search || '';
+  const searching = !!search.trim();
+  const path = (state._repLocPath||[]).filter(id=>byId(DB.exceptionLocations,id));
+  state._repLocPath = path;
+  const parentId = path.length ? path[path.length-1] : null;
+  const crumb = path.length ? path.map(id=>byId(DB.exceptionLocations,id).name).join(' › ') : 'שורש (בניינים / אתרים)';
+  const rows = searching ? flattenLocTree(false).filter(o=>smartMatch(o.label, search)).map(o=>o.node) : locChildren(parentId,false);
+  const total = draft.locationIds.length + draft.locationTexts.length;
+  const rowHtml = n => {
+    const checked = draft.locationIds.includes(n.id);
+    const kids = locChildren(n.id,false).length;
+    return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
+      <div class="msel-check" data-action="toggleLocation" data-id="${n.id}" style="cursor:pointer;">${checked?'✓':''}</div>
+      <div class="lbl" data-action="toggleLocation" data-id="${n.id}" style="cursor:pointer;flex:1;">${esc(n.name)}${searching?`<div class="sub">${esc(locNodeLabel(n.id))}</div>`:''}</div>
+      <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 10px;" data-action="repLocDrill" data-id="${n.id}" title="תתי-מיקום">${kids?kids+' ':''}›</button>
+      ${searching ? '' : `<div class="reorder-btns">
+        <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="up">▲</button>
+        <button type="button" data-action="reorderEntity" data-type="exceptionLocations" data-id="${n.id}" data-dir="down">▼</button>
+      </div>`}
+      <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 8px;" data-action="repLocEdit" data-id="${n.id}">✏️</button>
+      <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 8px;" data-action="repLocDelete" data-id="${n.id}">🗑</button>
+    </div>`;
+  };
   const html = `
     <div class="overlay" id="locationModalOverlay">
       <div class="sheet">
-        <div class="sheet-head"><h3>בחירת מיקומים / אזורים</h3>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${draft.locationIds.length + draft.locationTexts.length})</button>
+        <div class="sheet-head"><h3>בחירת מיקומים</h3>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-primary btn-sm" data-action="closeModal">✓ אישור (${total})</button>
             <button class="closebtn" data-action="closeModal">✕</button>
           </div>
         </div>
-        <input type="search" class="search-in-modal" id="locationSearchInput" placeholder="חיפוש מיקום…" value="${esc(search)}">
+        <input type="search" class="search-in-modal" id="locationSearchInput" placeholder="חיפוש מיקום (בכל הרמות)…" value="${esc(search)}">
+        ${draft.locationIds.length ? `<div class="chipset" style="margin-bottom:8px;">
+          ${draft.locationIds.map(id=>`<span class="chip">${esc(locNodeLabel(id))} <span class="x" data-action="repLocUnselect" data-id="${id}">×</span></span>`).join('')}
+        </div>` : ''}
+        ${searching ? '' : `<div class="hint" style="margin-bottom:8px;">📍 ${esc(crumb)}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          ${path.length ? `<button type="button" class="btn btn-outline btn-sm" data-action="repLocUp">⬆ רמה למעלה</button>
+          <button type="button" class="btn btn-outline btn-sm" data-action="repLocRoot">🏠 שורש</button>` : ''}
+        </div>`}
         <div id="locationListWrap">
-          ${locs.length===0 ? `<div class="empty"><div class="ic">📍</div>אין מיקומים תואמים</div>` :
-            locs.map(l=>{
-              const checked = draft.locationIds.includes(l.id);
-              return `<div class="msel-row ${checked?'checked':''}" style="gap:6px;">
-                <div class="msel-check" data-action="toggleLocation" data-id="${l.id}" style="cursor:pointer;">${checked?'✓':''}</div>
-                <div class="lbl" data-action="toggleLocation" data-id="${l.id}" style="cursor:pointer;flex:1;">${esc(l.name)}</div>
-                <div class="reorder-btns">
-                  <button type="button" data-action="reorderEntity" data-type="locations" data-id="${l.id}" data-dir="up">▲</button>
-                  <button type="button" data-action="reorderEntity" data-type="locations" data-id="${l.id}" data-dir="down">▼</button>
-                </div>
-                <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 10px;" data-action="deleteLocationFromPicker" data-id="${l.id}">🗑</button>
-              </div>`;
-            }).join('')
-          }
+          ${rows.length===0 ? `<div class="empty"><div class="ic">📍</div>${searching?'לא נמצאו מיקומים':'אין תתי-מיקום ברמה הזו עדיין'}</div>` : rows.map(rowHtml).join('')}
         </div>
-        <div class="field" style="margin-top:10px;">
+        <div class="hint" style="margin-top:6px;">סמן ✓ כדי לבחור מיקום (בכל רמה). לחץ › כדי להיכנס פנימה ולבחור/להוסיף תתי-מיקום.</div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="repLocAdd">✚ מיקום חדש כאן</button>
+        <div class="field" style="margin-top:14px;">
           <label>מיקום כטקסט חופשי (אם לא ברשימה)</label>
           <div style="display:flex;gap:8px;">
             <input type="text" id="freeLocationInput" placeholder="הקלד מיקום…" style="flex:1;">
@@ -1412,9 +1568,8 @@ function renderLocationPickerModal(search){
         ${draft.locationTexts.length ? `<div class="chipset" style="margin-top:8px;">
           ${draft.locationTexts.map((t,i)=>`<span class="chip">${esc(t)} <span class="x" data-action="removeFreeLocation" data-idx="${i}">×</span></span>`).join('')}
         </div>` : ''}
-        <button type="button" class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="openQuickAdd" data-kind="location">✚ מיקום חדש לרשימה</button>
-        ${(draft.locationIds.length + draft.locationTexts.length)>1 ? splitModeSection('location', draft) : ''}
-        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${draft.locationIds.length + draft.locationTexts.length} נבחרו)</button>
+        ${total>1 ? splitModeSection('location', draft) : ''}
+        <button class="btn btn-primary" style="margin-top:14px;" data-action="closeModal">אישור (${total} נבחרו)</button>
       </div>
     </div>`;
   setModalHtml(html);
@@ -1447,7 +1602,7 @@ function splitAxisItems(kind, draft){
   if(kind==='workType'){
     return draft.workTypeIds.map(id=>({key:id, label:workTypeName(id)}));
   }
-  const idItems = draft.locationIds.map(id=>{ const l=byId(DB.locations,id); return {key:'id:'+id, label:l?l.name:'(נמחק)'}; });
+  const idItems = draft.locationIds.map(id=>({key:'id:'+id, label:locNodeLabel(id)}));
   const textItems = draft.locationTexts.map(t=>({key:'text:'+t, label:t}));
   return [...idItems, ...textItems];
 }
@@ -1563,10 +1718,8 @@ async function submitQuickAddForm(form){
     if(!draft.workTypeIds.includes(obj.id)) draft.workTypeIds.push(obj.id);
     if(categoryId) draft.categoryId = categoryId;
   } else if(kind==='location'){
-    const obj = {id:uid(), name, active:true, order:DB.locations.length, createdAt:Date.now()};
-    DB.locations.push(obj);
-    await saveCollection('locations');
-    if(!draft.locationIds.includes(obj.id)) draft.locationIds.push(obj.id);
+    const leaf = await addLocationChain(null, name);
+    if(leaf && !draft.locationIds.includes(leaf)) draft.locationIds.push(leaf);
   }
   const labels = {category:'הקטגוריה נוספה ונבחרה', workType:'סוג העבודה נוסף ונבחר', location:'המיקום נוסף ונבחר'};
   toast(labels[kind]);
@@ -1582,7 +1735,7 @@ function getFilteredSortedReports(){
     if(f.workerIds.length && !f.workerIds.some(id=>r.workerIds.includes(id))) return false;
     if(f.categoryId && r.categoryId!==f.categoryId) return false;
     if(f.workTypeId && !(r.workTypeIds||[]).includes(f.workTypeId)) return false;
-    if(f.locationId && !(r.locationIds||[]).includes(f.locationId)) return false;
+    if(f.locationId){ const sub = locSubtreeIds(f.locationId); if(!(r.locationIds||[]).some(x=>sub.includes(x))) return false; }
     if(f.hoursMin!=="" && r.hours < parseFloat(f.hoursMin)) return false;
     if(f.hoursMax!=="" && r.hours > parseFloat(f.hoursMax)) return false;
     if(f.qtyMin!=="" && (r.quantity===null || r.quantity < parseFloat(f.qtyMin))) return false;
@@ -1656,8 +1809,8 @@ function viewHistory(){
             <select id="fWorkType"><option value="">הכל</option>${DB.workTypes.map(w=>`<option value="${w.id}" ${f.workTypeId===w.id?'selected':''}>${esc(w.name)}</option>`).join('')}</select>
           </div>
         </div>
-        <div class="field"><label>מיקום</label>
-          <select id="fLocation"><option value="">הכל</option>${DB.locations.map(l=>`<option value="${l.id}" ${f.locationId===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>
+        <div class="field"><label>מיקום (כולל תתי-מיקומים)</label>
+          <select id="fLocation"><option value="">הכל</option>${flattenLocTree(true).map(o=>`<option value="${o.id}" ${f.locationId===o.id?'selected':''}>${'　'.repeat(o.depth)}${esc(o.node.name)}</option>`).join('')}</select>
         </div>
         <div class="row2">
           <div class="field"><label>שעות מ-</label><input type="number" id="fHoursMin" value="${f.hoursMin}"></div>
@@ -1690,7 +1843,7 @@ function reportCard(r){
     </div>
     <div class="rcard-tags">
       ${(()=>{ const ids=r.workTypeIds||[]; if(ids.length>1){ const hmap=workTypeHoursMap(r); return ids.map(id=>`<span class="tag">🏷 ${esc(workTypeName(id))} (${fmtHM(hmap[id])})</span>`).join(''); } return ids.map(id=>`<span class="tag">🏷 ${esc(workTypeName(id))}</span>`).join(''); })()}
-      ${(()=>{ const keys=locationEntryKeys(r); if(keys.length>1){ const hmap=locationHoursMap(r); return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))} (${fmtHM(hmap[k])})</span>`).join(''); } return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))}</span>`).join(''); })()}
+      ${(()=>{ const keys=locationEntryKeys(r); if(keys.length>1){ const hmap=locationHoursMap(r); return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))} (${fmtHM(hmap[k])})</span>`).join(''); } return keys.map(k=>`<span class="tag">📍 ${esc(locationKeyLabel(k))}</span>`).join(''); })()}${(r.marks&&r.marks.length)?`<span class="tag">📌 ${r.marks.length}</span>`:''}
       ${r.quantity ? `<span class="tag">${fmtNum(r.quantity)} ${esc(unitName(r.unitId))}</span>`:''}
     </div>
     ${r.description ? `<div class="rcard-desc">${esc(r.description)}</div>`:''}
@@ -1770,7 +1923,7 @@ function viewReports(){
   const list = DB.reports.filter(r=>inRange(r.date,start,end));
 
   return `
-    ${appbar('דוחות', {rightIcon:'⭳', rightAction:'openExport'})}
+    ${appbar('דוחות', {rightIcon:'📤', rightAction:'openExport'})}
     <div class="filterbar">
       ${['day','week','month','custom'].map(t=>`<div class="fchip ${p.type===t?'active':''}" data-action="setPeriodType" data-type="${t}">${{day:'יום',week:'שבוע',month:'חודש',custom:'טווח מותאם'}[t]}</div>`).join('')}
     </div>
@@ -1793,6 +1946,10 @@ function viewReports(){
       ${[['worker','לפי עובד'],['workType','לפי סוג עבודה'],['category','לפי קטגוריה'],['location','לפי מיקום']].map(([k,l])=>
         `<div class="tabbtn ${state.reportsTab===k?'active':''}" data-action="setReportsTab" data-tab="${k}">${l}</div>`).join('')}
     </div>
+    ${state.reportsTab==='location' ? `<div class="filterbar" style="margin-bottom:10px;">
+      <div class="small-note" style="align-self:center;">רמת פירוט:</div>
+      ${[[0,'מלא'],[1,'רמה 1'],[2,'רמה 2'],[3,'רמה 3']].map(([v,l])=>`<div class="fchip ${(state.locRollup||0)===v?'active':''}" data-action="setLocRollup" data-val="${v}">${l}</div>`).join('')}
+    </div>` : ''}
     ${renderReportsTab(list)}
   `;
 }
@@ -1897,12 +2054,13 @@ function reportsByLocation(list){
     const hmap = locationHoursMap(r);
     const qmap = locationQtyMap(r);
     const wtHmap = workTypeHoursMap(r);
-    Object.entries(hmap).forEach(([key,hrs])=>{
+    Object.entries(hmap).forEach(([origKey,hrs])=>{
+      const key = locRollKey(origKey);
       const label = locationKeyLabel(key);
       if(!map[key]) map[key] = {label, hours:0, manHours:0, byWt:{}, qty:0, unit:null};
       map[key].hours += hrs;
       map[key].manHours += hrs*r.workerIds.length;
-      if(r.quantity){ map[key].qty += (qmap[key]||0); map[key].unit = unitName(r.unitId); }
+      if(r.quantity){ map[key].qty += (qmap[origKey]||0); map[key].unit = unitName(r.unitId); }
       Object.entries(wtHmap).forEach(([wtid])=>{ map[key].byWt[wtid] = (map[key].byWt[wtid]||0)+hrs; });
     });
   });
@@ -2042,7 +2200,31 @@ function viewLocationsUnits(){
       <div class="tabbtn ${state._luTab!=='u'?'active':''}" data-action="setLuTab" data-tab="loc">מיקומים</div>
       <div class="tabbtn ${state._luTab==='u'?'active':''}" data-action="setLuTab" data-tab="u">יחידות מידה</div>
     </div>
-    ${state._luTab==='u' ? viewEntityManagerInline('units') : viewEntityManagerInline('locations')}
+    ${state._luTab==='u' ? viewEntityManagerInline('units') : viewLocationTreeManager()}
+  `;
+}
+function viewLocationTreeManager(){
+  const q = em.search;
+  let rows = flattenLocTree(em.showInactive);
+  if(q) rows = rows.filter(o=>smartMatch(o.label,q));
+  return `
+    <div class="field"><input type="search" id="emSearch" placeholder="חיפוש מיקום…" value="${esc(q)}"></div>
+    <div class="filterbar">
+      <div class="fchip ${em.showInactive?'active':''}" data-action="toggleShowInactive" data-type="locations">הצג לא פעילים</div>
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:6px;" data-action="locMgrAdd" data-parent="">✚ הוסף מיקום ראשי (בניין / אתר)</button>
+    <div class="small-note" style="margin-bottom:12px;">＋ ליד כל שורה מוסיף תת-מיקום בתוכה. אפשר להקליד נתיב שלם עם ‹ &gt; ›, למשל: קומה 1 &gt; חדר חשמל &gt; קיר ימני. עץ המיקומים משותף לדיווחים, חריגים, נזקים ומשימות.</div>
+    ${rows.length===0 ? `<div class="empty"><div class="ic">📂</div>אין מיקומים עדיין</div>` :
+      rows.map(o=>`<div class="list-row" style="margin-inline-start:${Math.min(o.depth,6)*16}px;cursor:default;">
+        <div class="main">
+          <div class="title">${esc(o.node.name)}</div>
+          ${q ? `<div class="meta">${esc(o.label)}</div>` : ''}
+        </div>
+        ${o.node.active ? '' : `<span class="badge off">לא פעיל</span><button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 8px;" data-action="locMgrActivate" data-id="${o.id}">♻</button>`}
+        <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 10px;" data-action="locMgrAdd" data-parent="${o.id}">＋</button>
+        <button type="button" class="iconlink" style="flex:0 0 auto;padding:6px 8px;" data-action="locMgrRename" data-id="${o.id}">✏️</button>
+        <button type="button" class="iconlink danger" style="flex:0 0 auto;padding:6px 8px;" data-action="locMgrDelete" data-id="${o.id}">🗑</button>
+      </div>`).join('')}
   `;
 }
 // inline variant without its own appbar (used inside combined screens)
@@ -2065,7 +2247,7 @@ function viewEntityManagerInline(type){
 /* ============================== EXCEPTIONS (חריגים) MODULE ============================== */
 function blankException(){
   return { id:null, number:null, date: todayStr(), title:'', categoryId:'', locationPathIds:[],
-    photosBefore:[], photosDuring:[], photosAfter:[], documents:[], cost:'', linkedReportId:null, notes:'' };
+    photosBefore:[], photosDuring:[], photosAfter:[], documents:[], cost:'', linkedReportId:null, notes:'', marks:[] };
 }
 const excCategoryName = id => { if(!id) return "—"; const c=byId(DB.exceptionCategories,id); return c? c.name : "(נמחק)"; };
 function excLocationPathLabel(ids){
@@ -2081,7 +2263,7 @@ function viewExceptionsList(){
   const list = DB.exceptions.slice().sort((a,b)=> (b.date>a.date?1:(b.date<a.date?-1:(b.createdAt||0)-(a.createdAt||0))));
   const totalCost = list.reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
   return `
-    ${appbar('חריגים', {rightIcon:'⭳', rightAction:'openExceptionExport'})}
+    ${appbar('חריגים', {rightIcon:'📤', rightAction:'openExceptionExport'})}
     <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;">
       <div class="small-note">${list.length} חריגים</div>
       <div class="small-note">💰 סה"כ עלות משוערת: <b>${fmtNum(totalCost)} ₪</b></div>
@@ -2098,7 +2280,7 @@ function viewExceptionsList(){
           </div>
           <div style="font-weight:600;margin:4px 0;">${esc(ex.title||'(ללא כותרת)')}</div>
           <div class="rcard-tags">
-            ${ex.locationPathIds && ex.locationPathIds.length ? `<span class="tag">📍 ${esc(excLocationPathLabel(ex.locationPathIds))}</span>` : ''}
+            ${ex.locationPathIds && ex.locationPathIds.length ? `<span class="tag">📍 ${esc(excLocationPathLabel(ex.locationPathIds))}</span>` : ''}${(ex.marks&&ex.marks.length)?`<span class="tag">📌 ${ex.marks.length}</span>`:''}
             ${photoCount ? `<span class="tag">📸 ${photoCount} תמונות</span>` : ''}
             ${ex.cost ? `<span class="tag">💰 ${fmtNum(parseFloat(ex.cost))} ₪</span>` : ''}
             ${linked ? `<span class="tag">🔗 מקושר לדיווח ${esc(fmtDateHe(linked.date))}</span>` : ''}
@@ -2165,6 +2347,7 @@ function viewExceptionForm(editId){
           ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
         </button>
       </div>
+      ${marksFieldHtml('exception')}
       <div class="field">
         <label>עלות משוערת (אופציונלי, ₪)</label>
         <input type="number" name="cost" step="any" min="0" placeholder="לצורך תיעוד לתביעה עתידית" value="${esc(draft.cost)}">
@@ -2209,6 +2392,7 @@ async function submitExceptionForm(form){
     date, title,
     categoryId: draft.categoryId || '',
     locationPathIds: draft.locationPathIds.slice(),
+    marks: (draft.marks||[]).slice(),
     photosBefore: (draft.photosBefore||[]).slice(),
     photosDuring: (draft.photosDuring||[]).slice(),
     photosAfter: (draft.photosAfter||[]).slice(),
@@ -2401,6 +2585,7 @@ function blankDamage(){
     discoveredDate: todayStr(), discoveredTime: now.toTimeString().slice(0,5),
     occurredDate:'', occurredTime:'',
     locationPaths: [],
+    marks: [],
     categoryId:'',
     causedBy:'', causedByText:'',
     description:'',
@@ -2447,7 +2632,7 @@ function viewDamagesList(){
   }
   const openCount = DB.damages.filter(d=>d.followUpStatus!=='closed').length;
   return `
-    ${appbar('נזקים', {rightIcon:'⭳', rightAction:'openDamageExport'})}
+    ${appbar('נזקים', {rightIcon:'📤', rightAction:'openDamageExport'})}
     <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;">
       <div class="small-note">${list.length} מתוך ${DB.damages.length} נזקים</div>
       <div class="small-note">🔓 פתוחים: <b>${openCount}</b></div>
@@ -2469,7 +2654,7 @@ function viewDamagesList(){
           </div>
           <div style="font-weight:600;margin:4px 0;">${esc((d.description||'(ללא תיאור)').slice(0,120))}</div>
           <div class="rcard-tags">
-            ${d.locationPaths && d.locationPaths.length ? `<span class="tag">📍 ${esc(dmgLocationPathsLabel(d.locationPaths))}</span>` : ''}
+            ${d.locationPaths && d.locationPaths.length ? `<span class="tag">📍 ${esc(dmgLocationPathsLabel(d.locationPaths))}</span>` : ''}${(d.marks&&d.marks.length)?`<span class="tag">📌 ${d.marks.length}</span>`:''}
             ${(d.photos||[]).length ? `<span class="tag">📸 ${(d.photos||[]).length} תמונות</span>` : ''}
             ${d.cost ? `<span class="tag">💰 ${fmtNum(parseFloat(d.cost))} ₪</span>` : ''}
             <span class="tag">🛠 ${esc(optLabel(DMG_TREATMENT_OPTIONS,d.treatmentStatus))}</span>
@@ -2613,6 +2798,7 @@ function viewDamageForm(editId){
       </div>
 
       ${dmgLocationsField()}
+      ${marksFieldHtml('damage')}
 
       <div class="field">
         <div class="field-label-row"><label>סוג הנזק</label><button type="button" class="addlink" data-action="openDmgQuickAddCategory">✚ חדש</button></div>
@@ -2703,6 +2889,7 @@ async function submitDamageForm(form){
     occurredDate: fd.get('occurredDate') || '',
     occurredTime: fd.get('occurredTime') || '',
     locationPaths: (draft.locationPaths||[]).map(p=>p.slice()),
+    marks: (draft.marks||[]).slice(),
     categoryId: draft.categoryId || '',
     causedBy: fd.get('causedBy') || '',
     causedByText: fd.get('causedByText') || '',
@@ -2867,7 +3054,7 @@ function renderDmgLinkPickerModal(search){
 const PRIORITY_COLORS = {1:'#c8434c', 2:'#e0752e', 3:'#d9a812', 4:'#3f9142', 5:'#2f6fb0', 6:'#7a5aa8'};
 const taskCategoryName = id => { if(!id) return "—"; const c=byId(DB.taskCategories,id); return c? c.name : "(נמחק)"; };
 function blankTask(){
-  return { id:null, done:false, contentHtml:'', title:'', categoryId:'', locationPathIds:[], priority:null };
+  return { id:null, done:false, contentHtml:'', title:'', categoryId:'', locationPathIds:[], priority:null, marks:[] };
 }
 function taskRow(t){
   const showColors = state.taskShowPriorityColors;
@@ -2943,6 +3130,7 @@ function viewTaskForm(editId){
           ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
         </button>
       </div>
+      ${marksFieldHtml('task')}
 
       <div class="field">
         <label>רמת דחיפות (אופציונלי, 1 = הכי דחוף)</label>
@@ -3192,7 +3380,7 @@ function viewSettings(){
     <div class="card">
       <div class="small-note" style="margin-bottom:12px;">ייצוא של כל נתוני המערכת (עובדים, קטגוריות, סוגי עבודה, מיקומים, יחידות ודיווחים) לקובץ גיבוי.</div>
       <div class="btnrow">
-        <button class="btn btn-outline" data-action="exportBackup">⭳ ייצוא גיבוי</button>
+        <button class="btn btn-outline" data-action="exportBackup">📤 ייצוא גיבוי</button>
         <button class="btn btn-outline" data-action="triggerImport">⭱ ייבוא / שחזור</button>
       </div>
       <input type="file" id="importFileInput" accept="application/json" style="display:none;">
@@ -3286,7 +3474,7 @@ function openExportModal(kind){
         <select id="exportDmgCause"><option value="">— הכל —</option>${DMG_CAUSE_OPTIONS.map(o=>`<option value="${o.val}">${esc(o.label)}</option>`).join('')}</select>
       </div>` : ''}
       <div class="row2">
-        <button class="btn btn-primary" data-action="doExport">⭳ Excel</button>
+        <button class="btn btn-primary" data-action="doExport">📤 Excel</button>
         <button class="btn btn-outline" data-action="doExportPdf">🖨 PDF</button>
       </div>
     </div></div>`;
@@ -3749,6 +3937,567 @@ async function hardReset(){
   go({name:'home'});
 }
 
+/* ============================== PLANS (תוכניות) + MARKS (סימונים על תוכנית) ==============================
+   A plan = an uploaded PDF page or image (stored as a compressed JPEG). A mark lives INSIDE the record it
+   belongs to (report / exception / damage / task) as record.marks = [{id, planId, note, shapes:[…]}].
+   Shapes use coordinates normalised to 0..1 of the plan, so they stay exact at any zoom / screen size:
+     {t:'pin',x,y} · {t:'rect',x,y,w,h} · {t:'line',pts:[[x,y]…],w} · {t:'fill',x,y,w,h,img:<png>}  */
+const MARK_KINDS = {
+  report:{label:'דיווח עבודה', icon:'▤', color:'#2e9e4f'},
+  exception:{label:'חריג', icon:'⚠', color:'#ef7d00'},
+  damage:{label:'נזק', icon:'🧱', color:'#d93a3a'},
+  task:{label:'משימה', icon:'☑', color:'#2a6fd6'}
+};
+const marksDraft = kind => ({report:state.formDraft, exception:state.excFormDraft, damage:state.dmgFormDraft, task:state.taskFormDraft})[kind];
+const planName = id => { const pl=byId(DB.plans,id); return pl ? pl.name : '(תוכנית נמחקה)'; };
+function markSummary(m){
+  const sh=m.shapes||[]; const c=t=>sh.filter(x=>x.t===t).length;
+  const parts=[];
+  if(c('pin')) parts.push('📍 '+(c('pin')>1?c('pin')+' סיכות':'סיכה'));
+  if(c('fill')) parts.push('🟧 '+(c('fill')>1?c('fill')+' חדרים':'חדר'));
+  if(c('rect')) parts.push('▭ '+(c('rect')>1?c('rect')+' אזורים':'אזור'));
+  if(c('line')) parts.push('🖍 '+(c('line')>1?c('line')+' קווים':'קו'));
+  return parts.join(' · ') || 'סימון';
+}
+function marksFieldHtml(kind){
+  const d = marksDraft(kind);
+  const marks = (d && d.marks) || [];
+  return `<div class="field">
+    <label>📌 מיקום מדויק על תוכנית (סיכה / קיר / חדר — אופציונלי)</label>
+    ${marks.map((m,i)=>`<div class="dmg-loctag"><span data-action="pvEditMark" data-kind="${kind}" data-idx="${i}" style="cursor:pointer;">${esc(markSummary(m))} · ${esc(planName(m.planId))}${m.note?' · '+esc(m.note):''}</span><span class="x" data-action="removeMark" data-kind="${kind}" data-idx="${i}">×</span></div>`).join('')}
+    <button type="button" class="btn btn-outline btn-sm" data-action="openMarkOnPlan" data-kind="${kind}">${marks.length?'✚ סימון נוסף על תוכנית':'📌 סימון על תוכנית'}</button>
+  </div>`;
+}
+function recordLocationIds(kind){
+  const d=marksDraft(kind); if(!d) return [];
+  if(kind==='report') return d.locationIds||[];
+  if(kind==='damage') return [].concat(...(d.locationPaths||[]));
+  return d.locationPathIds||[];
+}
+function suggestedPlanIds(kind){
+  const set=new Set();
+  recordLocationIds(kind).forEach(id=>locNodePath(id).forEach(n=>set.add(n.id)));
+  return DB.plans.filter(pl=>pl.active!==false && pl.locationId && set.has(pl.locationId)).map(pl=>pl.id);
+}
+const MARK_RECORDS = () => [['report',DB.reports],['exception',DB.exceptions],['damage',DB.damages],['task',DB.tasks]];
+function collectPlanMarks(planId){
+  const out=[];
+  MARK_RECORDS().forEach(([kind,arr])=>arr.forEach(rec=>(rec.marks||[]).forEach((m,idx)=>{ if(m.planId===planId) out.push({kind,rec,m,idx}); })));
+  return out;
+}
+function markRecTitle(kind,rec){
+  if(kind==='report') return `${fmtDateHe(rec.date)} — ${rec.description||'דיווח עבודה'}`;
+  if(kind==='exception') return `#${rec.number} ${rec.title||''}`;
+  if(kind==='damage') return `#${rec.number} ${(rec.description||'').slice(0,70)}`;
+  const t = rec.title || String(rec.contentHtml||'').replace(/<[^>]+>/g,' ').trim().slice(0,70);
+  return t || 'משימה';
+}
+
+/* ---------- import: images + PDF ---------- */
+function pvLoadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('img')); i.src=src; }); }
+function rasterizeToPlan(source, sw, sh){
+  const sc=Math.min(1, 3200/Math.max(sw,sh));
+  const w=Math.max(1,Math.round(sw*sc)), h=Math.max(1,Math.round(sh*sc));
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,w,h); g.imageSmoothingQuality='high'; g.drawImage(source,0,0,w,h);
+  const img=c.toDataURL('image/jpeg',0.86);
+  const tsc=Math.min(1,360/Math.max(w,h));
+  const t=document.createElement('canvas'); t.width=Math.max(1,Math.round(w*tsc)); t.height=Math.max(1,Math.round(h*tsc));
+  t.getContext('2d').drawImage(c,0,0,t.width,t.height);
+  return {img, w, h, thumb:t.toDataURL('image/jpeg',0.72)};
+}
+async function imageFileToPlanData(file){
+  const url=URL.createObjectURL(file);
+  try{ const im=await pvLoadImg(url); return rasterizeToPlan(im, im.naturalWidth, im.naturalHeight); }
+  finally{ URL.revokeObjectURL(url); }
+}
+let _pdfLib=null;
+async function loadPdfJs(){
+  if(_pdfLib) return _pdfLib;
+  const base='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/';
+  const lib = await import(base+'pdf.min.mjs');
+  const code = await (await fetch(base+'pdf.worker.min.mjs')).text();
+  lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+  _pdfLib = lib;
+  return lib;
+}
+async function pdfFileToPages(file, onProgress){
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({data: await file.arrayBuffer()}).promise;
+  const n = Math.min(pdf.numPages, 40);
+  const out=[];
+  for(let p=1;p<=n;p++){
+    if(onProgress) onProgress(p,n);
+    const page = await pdf.getPage(p);
+    const v1 = page.getViewport({scale:1});
+    const sc = Math.max(1, Math.min(6, 3200/Math.max(v1.width,v1.height)));
+    const vp = page.getViewport({scale:sc});
+    const c=document.createElement('canvas'); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+    const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+    await page.render({canvasContext:g, viewport:vp, canvas:c}).promise;
+    out.push(rasterizeToPlan(c, c.width, c.height));
+    c.width=c.height=0;
+  }
+  if(pdf.numPages>n) toast(`יובאו ${n} העמודים הראשונים מתוך ${pdf.numPages}`);
+  return out;
+}
+const newPlanObj = (name,pg) => ({id:uid(), name, locationId:'', img:pg.img, thumb:pg.thumb, w:pg.w, h:pg.h, active:true, createdAt:Date.now()});
+async function handlePlanFiles(files){
+  if(!files.length) return;
+  const ctx = state._planImportCtx || {};
+  toast('מעבד תוכנית…');
+  const created=[];
+  for(const f of files){
+    const isPdf = f.type==='application/pdf' || /\.pdf$/i.test(f.name);
+    const base = f.name.replace(/\.[^.]+$/,'') || 'תוכנית';
+    try{
+      if(isPdf){
+        const pages = await pdfFileToPages(f, (i,n)=>{ if(n>1) toast(`ממיר עמוד ${i} מתוך ${n}…`); });
+        pages.forEach((pg,i)=>created.push(newPlanObj(pages.length>1 ? `${base} – עמוד ${i+1}` : base, pg)));
+      } else if((f.type||'').startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name)){
+        created.push(newPlanObj(base, await imageFileToPlanData(f)));
+      } else { toast('סוג קובץ לא נתמך: '+f.name); }
+    }catch(err){
+      console.error(err);
+      toast('שגיאה בקובץ '+f.name+(isPdf?' (PDF דורש חיבור לאינטרנט בפעם הראשונה)':''));
+    }
+  }
+  if(!created.length) return;
+  DB.plans.push(...created);
+  await saveCollection('plans');
+  toast(created.length>1 ? `נוספו ${created.length} תוכניות` : 'התוכנית נוספה');
+  if(ctx.kind && marksDraft(ctx.kind)) pvOpen({mode:'edit', kind:ctx.kind, planId:created[0].id});
+  else render();
+}
+
+/* ---------- plans screen ---------- */
+function viewPlans(){
+  state._planImportCtx = {screen:true};
+  const plans = DB.plans.filter(pl=>pl.active!==false);
+  return `
+    ${appbar('תוכניות וסימונים')}
+    <label class="btn btn-primary" style="display:block;text-align:center;margin-bottom:8px;">✚ הוספת תוכנית (PDF / תמונה)
+      <input type="file" id="planFileInput" accept="application/pdf,image/*,.pdf" multiple style="display:none">
+    </label>
+    <div class="small-note" style="margin-bottom:14px;">אפשר להעלות כמה קבצים יחד. ב־PDF כל עמוד הופך לתוכנית נפרדת. אחר כך בכל דיווח, חריג, נזק או משימה — כפתור "סימון על תוכנית".</div>
+    ${plans.length===0 ? `<div class="empty"><div class="ic">🗺</div>עדיין אין תוכניות</div>` : plans.map(pl=>{
+      const cnt = collectPlanMarks(pl.id).length;
+      return `<div class="card" style="display:flex;gap:10px;align-items:flex-start;">
+        <img src="${pl.thumb||pl.img}" data-action="planOpen" data-id="${pl.id}" style="width:92px;height:66px;object-fit:cover;border-radius:8px;cursor:pointer;background:#fff;flex:0 0 auto;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;">${esc(pl.name)}</div>
+          <div class="small-note">${pl.locationId?'📍 '+esc(locNodeLabel(pl.locationId))+' · ':''}📌 ${cnt} סימונים</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" data-action="planOpen" data-id="${pl.id}">פתח</button>
+            <button type="button" class="btn btn-outline btn-sm" data-action="planEdit" data-id="${pl.id}">✏️ שם / מיקום</button>
+            <button type="button" class="btn btn-outline btn-sm" style="color:var(--red);" data-action="planDelete" data-id="${pl.id}">🗑</button>
+          </div>
+        </div>
+      </div>`; }).join('')}
+  `;
+}
+function openPlanEdit(id){
+  const pl=byId(DB.plans,id); if(!pl) return;
+  pushModalHistory();
+  setModalHtml(`<div class="overlay" id="planEditOverlay"><div class="sheet">
+    <div class="sheet-head"><h3>עריכת תוכנית</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+    <div class="field"><label>שם התוכנית</label><input type="text" id="planEditName" value="${esc(pl.name)}"></div>
+    <div class="field"><label>שיוך למיקום (כדי שהתוכנית תוצע אוטומטית כשבוחרים מיקום)</label>
+      <select id="planEditLoc"><option value="">— ללא שיוך —</option>
+        ${flattenLocTree(true).map(o=>`<option value="${o.id}" ${pl.locationId===o.id?'selected':''}>${'　'.repeat(o.depth)}${esc(o.node.name)}</option>`).join('')}
+      </select></div>
+    <button class="btn btn-primary" data-action="planEditSave" data-id="${id}">שמור</button>
+  </div></div>`);
+}
+
+/* ---------- choosing a plan from inside a record form ---------- */
+function openMarkOnPlan(kind){
+  state._planImportCtx = {kind};
+  pushModalHistory();
+  renderPlanChooser(kind);
+}
+function renderPlanChooser(kind){
+  const plans = DB.plans.filter(pl=>pl.active!==false);
+  const sug = suggestedPlanIds(kind);
+  const rest = plans.filter(pl=>!sug.includes(pl.id));
+  const row = pl => `<div class="msel-row" data-action="pvOpenEdit" data-kind="${kind}" data-id="${pl.id}" style="gap:10px;cursor:pointer;">
+    <img src="${pl.thumb||pl.img}" style="width:64px;height:46px;object-fit:cover;border-radius:6px;background:#fff;flex:0 0 auto;">
+    <div class="lbl" style="flex:1;">${esc(pl.name)}${pl.locationId?`<div class="sub">📍 ${esc(locNodeLabel(pl.locationId))}</div>`:''}</div><span>›</span></div>`;
+  setModalHtml(`<div class="overlay" id="planChooserOverlay"><div class="sheet">
+    <div class="sheet-head"><h3>איזו תוכנית?</h3><button class="closebtn" data-action="closeModal">✕</button></div>
+    ${plans.length===0 ? `<div class="empty"><div class="ic">🗺</div>אין תוכניות עדיין — העלה PDF או תמונה</div>` : ''}
+    ${sug.length ? `<div class="hint" style="margin-bottom:6px;">מומלצות למיקום שבחרת</div>${plans.filter(pl=>sug.includes(pl.id)).map(row).join('')}` : ''}
+    ${rest.length ? `<div class="hint" style="margin:10px 0 6px;">${sug.length?'כל שאר התוכניות':'התוכניות שלך'}</div>${rest.map(row).join('')}` : ''}
+    <label class="btn btn-outline" style="display:block;text-align:center;margin-top:14px;">✚ העלאת תוכנית חדשה (PDF / תמונה)
+      <input type="file" id="planFileInput" accept="application/pdf,image/*,.pdf" multiple style="display:none">
+    </label>
+  </div></div>`);
+}
+
+/* ---------- the viewer ---------- */
+const PV = { pointers:new Map() };
+const pvStage = () => document.getElementById('pvStage');
+const pvNorm = w => ({x:Math.max(0,Math.min(1,w.x/PV.pw)), y:Math.max(0,Math.min(1,w.y/PV.ph))});
+function pvScreenToWorld(cx,cy){ const r=pvStage().getBoundingClientRect(); const v=PV.view; return {x:(cx-r.left-v.x)/v.s, y:(cy-r.top-v.y)/v.s}; }
+function pvOpen(opts){
+  const plan=byId(DB.plans,opts.planId);
+  if(!plan){ toast('התוכנית לא נמצאה'); return; }
+  const d = opts.mode==='edit' ? marksDraft(opts.kind) : null;
+  if(opts.mode==='edit' && !d){ toast('אין רשומה פתוחה'); return; }
+  if(d && !d.marks) d.marks=[];
+  Object.assign(PV,{mode:opts.mode, kind:opts.kind||null, planId:plan.id, plan, tool: opts.mode==='edit'?'pin':'pan', cur:opts.cur||null, sel:null,
+    view:{s:1,x:0,y:0}, pw:plan.w, ph:plan.h, penW:0.012, filter:{report:true,exception:true,damage:true,task:true},
+    fillCache:null, pointers:new Map(), g:null, pinch:null, draw:null, chips:[], vis:[], fit:1});
+  const root=document.getElementById('modalRoot');
+  const hasModal = navStack.length && navStack[navStack.length-1].kind==='modal' && root.innerHTML.trim()!=='';
+  if(!hasModal) pushModalHistory();
+  const sub = plan.locationId ? '📍 '+locNodeLabel(plan.locationId) : (opts.mode==='edit' ? MARK_KINDS[opts.kind].label : 'כל הסימונים');
+  root.innerHTML = `<div class="pvroot" id="pvRoot">
+    <div class="pvhead">
+      <button type="button" class="pvbtn primary" data-action="pvDone">✓ סיום</button>
+      <div class="t"><h2>${esc(plan.name)}</h2><div class="s">${esc(sub)}</div></div>
+      <button type="button" class="pvbtn" data-action="pvFit" title="התאם למסך">⤢</button>
+      <button type="button" class="pvbtn" data-action="pvExport" title="שמור / שתף תמונה">📤</button>
+    </div>
+    <div class="pvstage" id="pvStage"><div class="pvworld" id="pvWorld"><img id="pvImg" width="${plan.w}" height="${plan.h}" alt=""><svg id="pvSvg" width="${plan.w}" height="${plan.h}" viewBox="0 0 ${plan.w} ${plan.h}"></svg></div><div class="pvchips" id="pvChips"></div></div>
+    <div class="pvpanel" id="pvPanel"></div>
+  </div>`;
+  document.getElementById('pvImg').src = plan.img;
+  pvBindStage();
+  pvFit(); pvRefresh();
+}
+function pvVisibleMarks(){
+  const out=[];
+  if(PV.mode==='edit'){
+    const d=marksDraft(PV.kind);
+    collectPlanMarks(PV.planId).forEach(o=>{ if(d && d._editId && o.rec.id===d._editId && o.kind===PV.kind) return; out.push({m:o.m,kind:o.kind,rec:o.rec,faint:true,editable:false}); });
+    (d.marks||[]).forEach(m=>{ if(m.planId===PV.planId) out.push({m,kind:PV.kind,rec:d,editable:true}); });
+  } else {
+    collectPlanMarks(PV.planId).forEach(o=>{ if(PV.filter[o.kind]) out.push({m:o.m,kind:o.kind,rec:o.rec,editable:false}); });
+  }
+  return out;
+}
+function markAnchor(m){
+  const s=(m.shapes||[])[0]; if(!s) return null;
+  if(s.t==='pin') return {x:s.x,y:s.y};
+  if(s.t==='line'){ const q=s.pts[Math.floor(s.pts.length/2)]; return {x:q[0],y:q[1]}; }
+  return {x:s.x+s.w/2, y:s.y+s.h/2};
+}
+function pvShapesSvg(m,color,faint,isCur){
+  const pw=PV.pw, ph=PV.ph, M=Math.max(pw,ph);
+  const fo = faint?0.12:(isCur?0.4:0.28), so = faint?0.4:1;
+  return (m.shapes||[]).map(sh=>{
+    if(sh.t==='rect') return `<rect x="${sh.x*pw}" y="${sh.y*ph}" width="${sh.w*pw}" height="${sh.h*ph}" fill="${color}" fill-opacity="${fo}" stroke="${color}" stroke-opacity="${so}" stroke-width="${isCur?4:3}" vector-effect="non-scaling-stroke"/>`;
+    if(sh.t==='line'){
+      const w=(sh.w||0.012)*M, op=faint?0.2:0.5;
+      if(sh.pts.length<2){ const q=sh.pts[0]; return `<circle cx="${q[0]*pw}" cy="${q[1]*ph}" r="${w/2}" fill="${color}" fill-opacity="${op}"/>`; }
+      return `<polyline points="${sh.pts.map(q=>(q[0]*pw).toFixed(1)+','+(q[1]*ph).toFixed(1)).join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    if(sh.t==='fill') return `<image href="${sh.img}" x="${sh.x*pw}" y="${sh.y*ph}" width="${sh.w*pw}" height="${sh.h*ph}" preserveAspectRatio="none" opacity="${faint?0.4:1}"/>`;
+    return '';
+  }).join('');
+}
+function pvRefresh(){ pvRenderShapes(); pvRenderPanel(); }
+function pvRenderShapes(){
+  const svg=document.getElementById('pvSvg'); if(!svg) return;
+  PV.vis = pvVisibleMarks();
+  svg.innerHTML = PV.vis.map(v=>pvShapesSvg(v.m, MARK_KINDS[v.kind].color, !!v.faint, (v.editable&&PV.cur===v.m.id)||(PV.sel&&PV.sel.m===v.m))).join('') + '<g id="pvPrev"></g>';
+  pvRenderChips();
+}
+function pvEditNumber(mid){ const list=PV.vis.filter(v=>v.editable); return list.findIndex(v=>v.m.id===mid)+1; }
+function pvRenderChips(){
+  const box=document.getElementById('pvChips'); if(!box) return;
+  const chips=[]; const html=[]; let n=0;
+  PV.vis.forEach(v=>{
+    const a=markAnchor(v.m); if(!a) return;
+    const col=MARK_KINDS[v.kind].color;
+    const pin=v.m.shapes[0].t==='pin';
+    let label='';
+    if(!v.faint){ if(PV.mode==='edit'){ n++; label=String(n); } else label=MARK_KINDS[v.kind].icon; }
+    const cur=(v.editable&&PV.cur===v.m.id)||(PV.sel&&PV.sel.m===v.m);
+    html.push(`<div class="pvchip ${pin?'pin':'area'} ${v.faint?'faint':''} ${cur?'cur':''}" style="--c:${col}">${label}</div>`);
+    chips.push({v,a,pin,faint:!!v.faint});
+  });
+  box.innerHTML=html.join(''); PV.chips=chips; pvLayoutChips();
+}
+function pvLayoutChips(){
+  const box=document.getElementById('pvChips'); if(!box||!PV.chips) return;
+  PV.chips.forEach((c,i)=>{ const el=box.children[i]; if(!el) return; el.style.left=(c.a.x*PV.pw*PV.view.s+PV.view.x)+'px'; el.style.top=(c.a.y*PV.ph*PV.view.s+PV.view.y)+'px'; });
+}
+function pvApply(){ const w=document.getElementById('pvWorld'); if(!w) return; const v=PV.view; w.style.transform=`translate(${v.x}px,${v.y}px) scale(${v.s})`; pvLayoutChips(); }
+function pvFit(){ const st=pvStage(); if(!st) return; const W=st.clientWidth,H=st.clientHeight; const sc=Math.min(W/PV.pw,H/PV.ph)*0.98; PV.fit=sc; PV.view={s:sc,x:(W-PV.pw*sc)/2,y:(H-PV.ph*sc)/2}; pvApply(); }
+const pvClamp = sc => Math.max(PV.fit*0.6, Math.min(Math.max(PV.fit*25,3), sc));
+function pvZoomAt(cx,cy,f){ const v=PV.view; const ns=pvClamp(v.s*f); const k=ns/v.s; v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.s=ns; pvApply(); }
+function pvBindStage(){
+  const st=pvStage();
+  st.addEventListener('pointerdown',pvDown); st.addEventListener('pointermove',pvMove);
+  st.addEventListener('pointerup',pvUp); st.addEventListener('pointercancel',pvUp);
+  st.addEventListener('wheel',e=>{ e.preventDefault(); const r=st.getBoundingClientRect(); pvZoomAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.15:1/1.15); },{passive:false});
+}
+function pvDown(e){
+  const st=pvStage(); try{ st.setPointerCapture(e.pointerId); }catch(_){}
+  const r=st.getBoundingClientRect();
+  PV.pointers.set(e.pointerId,{x:e.clientX-r.left,y:e.clientY-r.top});
+  if(PV.pointers.size===2){
+    PV.draw=null; pvClearPreview(); PV.g=null;
+    const [a,b]=[...PV.pointers.values()];
+    PV.pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1, mx:(a.x+b.x)/2, my:(a.y+b.y)/2, view:{...PV.view}};
+    return;
+  }
+  if(PV.pointers.size>2) return;
+  const p=PV.pointers.get(e.pointerId);
+  PV.g={id:e.pointerId,sx:p.x,sy:p.y,x:p.x,y:p.y,t:Date.now(),moved:0,view:{...PV.view}};
+  if(PV.mode==='edit' && (PV.tool==='rect'||PV.tool==='marker')){
+    const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
+    PV.draw = PV.tool==='rect' ? {t:'rect',x0:n.x,y0:n.y,x1:n.x,y1:n.y} : {t:'line',pts:[[n.x,n.y]]};
+  }
+}
+function pvMove(e){
+  const p=PV.pointers.get(e.pointerId); if(!p) return;
+  const r=pvStage().getBoundingClientRect();
+  p.x=e.clientX-r.left; p.y=e.clientY-r.top;
+  if(PV.pointers.size>=2 && PV.pinch){
+    const [a,b]=[...PV.pointers.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y)||1, mx=(a.x+b.x)/2, my=(a.y+b.y)/2, P=PV.pinch;
+    const ns=pvClamp(P.view.s*d/P.d);
+    const wx=(P.mx-P.view.x)/P.view.s, wy=(P.my-P.view.y)/P.view.s;
+    PV.view={s:ns,x:mx-wx*ns,y:my-wy*ns}; pvApply(); return;
+  }
+  const g=PV.g; if(!g||g.id!==e.pointerId) return;
+  g.moved=Math.max(g.moved,Math.hypot(p.x-g.sx,p.y-g.sy)); g.x=p.x; g.y=p.y;
+  if(PV.draw){
+    const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
+    if(PV.draw.t==='rect'){ PV.draw.x1=n.x; PV.draw.y1=n.y; }
+    else { const last=PV.draw.pts[PV.draw.pts.length-1]; if(Math.hypot((n.x-last[0])*PV.pw*PV.view.s,(n.y-last[1])*PV.ph*PV.view.s)>2) PV.draw.pts.push([n.x,n.y]); }
+    pvRenderPreview(); return;
+  }
+  PV.view={s:g.view.s,x:g.view.x+(p.x-g.sx),y:g.view.y+(p.y-g.sy)}; pvApply();
+}
+function pvUp(e){
+  PV.pointers.delete(e.pointerId);
+  if(PV.pointers.size<2) PV.pinch=null;
+  const g=PV.g;
+  if(!g||g.id!==e.pointerId) return;
+  PV.g=null;
+  const tap = g.moved<8 && Date.now()-g.t<700;
+  if(PV.draw){
+    const d=PV.draw; PV.draw=null; pvClearPreview();
+    if(d.t==='rect'){
+      const w=Math.abs(d.x1-d.x0), h=Math.abs(d.y1-d.y0);
+      if(w*PV.pw*PV.view.s>10 && h*PV.ph*PV.view.s>10) pvAddShape({t:'rect',x:Math.min(d.x0,d.x1),y:Math.min(d.y0,d.y1),w,h});
+      else toast('גרור באלכסון כדי לסמן אזור');
+    } else {
+      pvAddShape({t:'line',pts:d.pts.map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)]),w:PV.penW});
+    }
+    return;
+  }
+  if(!tap) return;
+  const hit=pvHitChip(g.x,g.y);
+  if(hit){ pvSelectChip(hit); return; }
+  if(PV.mode!=='edit'){ PV.sel=null; pvRefresh(); return; }
+  const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
+  if(PV.tool==='pin') pvAddShape({t:'pin',x:+n.x.toFixed(4),y:+n.y.toFixed(4)});
+  else if(PV.tool==='room'){
+    const res=pvFloodFill(n.x,n.y);
+    if(res.err==='wall') toast('לחץ בתוך החדר, לא על קו');
+    else if(res.err==='leak') toast('החדר לא סגור (חסר קיר או דלת פתוחה). נסה 🖍 קיר או ▭ מלבן');
+    else if(res.err==='tiny') toast('האזור קטן מדי — נסה סיכה');
+    else if(res.shape) pvAddShape(res.shape);
+  }
+}
+function pvHitChip(sx,sy){
+  let best=null, bd=26;
+  PV.chips.forEach(c=>{ if(c.faint) return;
+    const cx=c.a.x*PV.pw*PV.view.s+PV.view.x, cy=c.a.y*PV.ph*PV.view.s+PV.view.y-(c.pin?21:0);
+    const d=Math.hypot(sx-cx,sy-cy); if(d<bd){ bd=d; best=c; } });
+  return best;
+}
+function pvSelectChip(c){
+  if(PV.mode==='edit'){ if(!c.v.editable) return; PV.cur=c.v.m.id; }
+  else PV.sel={m:c.v.m,kind:c.v.kind,rec:c.v.rec};
+  pvRefresh();
+}
+function pvRenderPreview(){
+  const g=document.getElementById('pvPrev'); if(!g||!PV.draw) return;
+  const col=MARK_KINDS[PV.kind].color, d=PV.draw, pw=PV.pw, ph=PV.ph, M=Math.max(pw,ph);
+  if(d.t==='rect') g.innerHTML=`<rect x="${Math.min(d.x0,d.x1)*pw}" y="${Math.min(d.y0,d.y1)*ph}" width="${Math.abs(d.x1-d.x0)*pw}" height="${Math.abs(d.y1-d.y0)*ph}" fill="${col}" fill-opacity="0.25" stroke="${col}" stroke-width="3" stroke-dasharray="8 6" vector-effect="non-scaling-stroke"/>`;
+  else g.innerHTML = d.pts.length<2 ? `<circle cx="${d.pts[0][0]*pw}" cy="${d.pts[0][1]*ph}" r="${PV.penW*M/2}" fill="${col}" fill-opacity="0.5"/>` : `<polyline points="${d.pts.map(q=>(q[0]*pw).toFixed(1)+','+(q[1]*ph).toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-opacity="0.5" stroke-width="${PV.penW*M}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+function pvClearPreview(){ const g=document.getElementById('pvPrev'); if(g) g.innerHTML=''; }
+function pvAddShape(sh){
+  const d=marksDraft(PV.kind); if(!d.marks) d.marks=[];
+  let m = PV.cur ? d.marks.find(x=>x.id===PV.cur) : null;
+  if(!m){ m={id:uid(),planId:PV.planId,note:'',shapes:[]}; d.marks.push(m); PV.cur=m.id; }
+  m.shapes.push(sh);
+  pvRefresh();
+}
+function pvCurMark(){ const d=marksDraft(PV.kind); return (PV.cur && d) ? (d.marks||[]).find(x=>x.id===PV.cur) : null; }
+function pvUndo(){
+  const d=marksDraft(PV.kind), m=pvCurMark(); if(!m) return;
+  m.shapes.pop();
+  if(!m.shapes.length){ d.marks=d.marks.filter(x=>x!==m); PV.cur=null; }
+  pvRefresh();
+}
+function pvDeleteCur(){ const d=marksDraft(PV.kind), m=pvCurMark(); if(!m) return; d.marks=d.marks.filter(x=>x!==m); PV.cur=null; pvRefresh(); toast('הסימון נמחק'); }
+const PV_HINTS = {
+  pan:'גרור להזזה · צביטה בשתי אצבעות לזום',
+  pin:'לחץ על הנקודה המדויקת בתוכנית — תיתפס סיכה 📍',
+  room:'לחץ בתוך חדר — כל החדר נצבע. אפשר ללחוץ בעוד חדרים, וכולם ייכנסו לאותו סימון',
+  marker:'צייר עם האצבע לאורך הקיר — כמו מרקר. כל הקו נשמר לסימון',
+  rect:'גרור באלכסון מפינה לפינה — כל המלבן מסומן (למשל פינה, קטע קיר או אזור)'
+};
+function pvRenderPanel(){
+  const el=document.getElementById('pvPanel'); if(!el) return;
+  if(PV.mode==='browse'){
+    const all=collectPlanMarks(PV.planId);
+    const sel=PV.sel;
+    el.innerHTML = `<div class="pvfils">${Object.keys(MARK_KINDS).map(k=>{ const c=all.filter(o=>o.kind===k).length; return `<button type="button" class="pvfil ${PV.filter[k]?'on':''}" style="--c:${MARK_KINDS[k].color}" data-action="pvFilter" data-kind="${k}">${MARK_KINDS[k].icon} ${MARK_KINDS[k].label} (${c})</button>`; }).join('')}</div>
+      ${sel ? `<div class="pvcard"><b>${MARK_KINDS[sel.kind].icon} ${MARK_KINDS[sel.kind].label}</b> · ${esc(markRecTitle(sel.kind,sel.rec))}
+        <div class="pvdim" style="margin:4px 0;">${esc(markSummary(sel.m))}${sel.m.note?' — '+esc(sel.m.note):''}</div>
+        <div class="pvbtns"><button type="button" data-action="pvOpenRecord" data-kind="${sel.kind}" data-id="${sel.rec.id}">פתח את הרשומה ›</button></div></div>`
+      : `<div class="pvdim">${all.length?'לחץ על סימון בתוכנית כדי לראות את הרשומה שלו':'עדיין אין סימונים על התוכנית הזו'}</div>`}`;
+    return;
+  }
+  const tools=[['pin','📍','סיכה'],['room','🪣','חדר שלם'],['marker','🖍','קיר / קו'],['rect','▭','מלבן'],['pan','✋','הזזה']];
+  const m=pvCurMark();
+  el.innerHTML = `<div class="pvtools">${tools.map(([k,i,l])=>`<button type="button" class="pvtool ${PV.tool===k?'on':''}" data-action="pvTool" data-tool="${k}"><span class="i">${i}</span><span>${l}</span></button>`).join('')}</div>
+    <div class="pvhint">${PV_HINTS[PV.tool]}</div>
+    ${PV.tool==='marker' ? `<div class="pvrow">עובי <input type="range" id="pvPen" min="0.004" max="0.03" step="0.001" value="${PV.penW}"></div>` : ''}
+    ${m ? `<div class="pvcur"><div><b>סימון ${pvEditNumber(m.id)}</b> · ${esc(markSummary(m))}</div>
+        <input type="text" class="pvnote" id="pvNote" placeholder="הערה — למשל: לתקן את כל הקיר הזה" value="${esc(m.note||'')}">
+        <div class="pvbtns"><button type="button" data-action="pvUndo">↶ בטל צורה אחרונה</button><button type="button" data-action="pvNewMark">＋ סימון חדש</button><button type="button" class="danger" data-action="pvDelMark">🗑 מחק סימון</button></div></div>`
+      : `<div class="pvdim">כל מה שתסמן יישמר כסימון אחד. "סימון חדש" מתחיל סימון נפרד.</div>`}`;
+}
+
+/* ---- "whole room" tool: tap inside a room, it floods up to the walls (dark lines) of the drawing.
+   If the first try leaks through door openings into other rooms, it retries with thicker walls so
+   door gaps get "closed" (2 -> 6 -> 14 -> 28px at ~2000px working size). ---- */
+function pvFillCache(){
+  if(PV.fillCache) return PV.fillCache;
+  const img=document.getElementById('pvImg');
+  const sc=Math.min(1, 2000/Math.max(PV.pw,PV.ph));
+  const W=Math.max(1,Math.round(PV.pw*sc)), H=Math.max(1,Math.round(PV.ph*sc));
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H); g.drawImage(img,0,0,W,H);
+  const d=g.getImageData(0,0,W,H).data;
+  const base=new Uint8Array(W*H);
+  for(let i=0,j=0;i<base.length;i++,j+=4){ base[i] = (0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])<205 ? 1 : 0; }
+  return (PV.fillCache={W,H,base,walls:{}});
+}
+function pvDilate(src,W,H){
+  const out=new Uint8Array(src);
+  for(let y=1;y<H-1;y++){ for(let x=1;x<W-1;x++){ const i=y*W+x; if(src[i]) continue; if(src[i-1]||src[i+1]||src[i-W]||src[i+W]) out[i]=1; } }
+  return out;
+}
+function pvWallAt(r){
+  const C=pvFillCache();
+  if(C.walls[r]) return C.walls[r];
+  let cur=C.base; for(let i=0;i<r;i++) cur=pvDilate(cur,C.W,C.H);
+  return (C.walls[r]=cur);
+}
+function pvFloodRun(wall,W,H,sx,sy){
+  const mask=new Uint8Array(W*H); const stack=[sx,sy];
+  let count=0, minx=sx,maxx=sx,miny=sy,maxy=sy, leak=false; const limit=W*H*0.45;
+  outer: while(stack.length){
+    const y=stack.pop(), x0=stack.pop(); const row=y*W; let x=x0;
+    while(x>=0 && !wall[row+x] && !mask[row+x]) x--;
+    x++;
+    let up=false, dn=false;
+    while(x<W && !wall[row+x] && !mask[row+x]){
+      mask[row+x]=1; count++;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x<=1||x>=W-2||y<=1||y>=H-2){ leak=true; break outer; }
+      if(count>limit){ leak=true; break outer; }
+      if(y>0){ const u=row-W+x; const open=!wall[u]&&!mask[u]; if(open&&!up){ stack.push(x,y-1); up=true; } else if(!open) up=false; }
+      if(y<H-1){ const q=row+W+x; const open=!wall[q]&&!mask[q]; if(open&&!dn){ stack.push(x,y+1); dn=true; } else if(!open) dn=false; }
+      x++;
+    }
+  }
+  return {mask,count,minx,maxx,miny,maxy,leak};
+}
+function pvFloodFill(nx,ny){
+  const {W,H}=pvFillCache();
+  const tx=Math.min(W-1,Math.max(0,Math.round(nx*W))), ty=Math.min(H-1,Math.max(0,Math.round(ny*H)));
+  let best=null, fallback=null, lastErr='leak';
+  for(const r of [2,6,14,28]){
+    const wall=pvWallAt(r);
+    let sx=tx, sy=ty;
+    if(wall[sy*W+sx]){
+      let found=false;
+      for(let k=1;k<=14&&!found;k++){ for(let dy=-k;dy<=k&&!found;dy++){ for(let dx=-k;dx<=k;dx++){
+        if(Math.max(Math.abs(dx),Math.abs(dy))!==k) continue;
+        const x=tx+dx,y=ty+dy; if(x<0||y<0||x>=W||y>=H) continue;
+        if(!wall[y*W+x]){ sx=x; sy=y; found=true; break; } } } }
+      if(!found){ lastErr='wall'; continue; }
+    }
+    const f=pvFloodRun(wall,W,H,sx,sy);
+    if(f.leak){ lastErr='leak'; continue; }
+    if(f.count<150){ lastErr='tiny'; continue; }
+    if(f.count>W*H*0.2 && r<28){ if(!fallback) fallback={f,r}; lastErr='leak'; continue; }
+    best={f,r}; break;
+  }
+  if(!best) best=fallback;
+  if(!best) return {err:lastErr};
+  const {f,r}=best; const {minx,maxx,miny,maxy}=f;
+  // grow back over the thickened wall edge so the colour reaches the wall line
+  let m2=f.mask; const base=pvFillCache().base;
+  for(let i=0;i<Math.min(r,28);i++){
+    const out=new Uint8Array(m2);
+    for(let y=Math.max(1,miny-4);y<=Math.min(H-2,maxy+4);y++){ for(let x=Math.max(1,minx-4);x<=Math.min(W-2,maxx+4);x++){ const k=y*W+x; if(m2[k]||base[k]) continue; if(m2[k-1]||m2[k+1]||m2[k-W]||m2[k+W]) out[k]=1; } }
+    m2=out;
+  }
+  const pad=4, bx=Math.max(0,minx-pad), by=Math.max(0,miny-pad), bw=Math.min(W,maxx+pad+1)-bx, bh=Math.min(H,maxy+pad+1)-by;
+  const c=document.createElement('canvas'); c.width=bw; c.height=bh;
+  const g=c.getContext('2d'); const id=g.createImageData(bw,bh);
+  const hex=MARK_KINDS[PV.kind].color; const R=parseInt(hex.slice(1,3),16), G=parseInt(hex.slice(3,5),16), B=parseInt(hex.slice(5,7),16);
+  for(let y=0;y<bh;y++){ for(let x=0;x<bw;x++){ if(m2[(by+y)*W+bx+x]){ const k=(y*bw+x)*4; id.data[k]=R; id.data[k+1]=G; id.data[k+2]=B; id.data[k+3]=120; } } }
+  g.putImageData(id,0,0);
+  return {shape:{t:'fill', x:+(bx/W).toFixed(5), y:+(by/H).toFixed(5), w:+(bw/W).toFixed(5), h:+(bh/H).toFixed(5), img:c.toDataURL('image/png')}};
+}
+
+/* ---- export the plan with its marks as one image (save / share) ---- */
+async function pvExportPng(){
+  try{
+    const plan=PV.plan, W=plan.w, H=plan.h, M=Math.max(W,H);
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const g=c.getContext('2d');
+    g.drawImage(await pvLoadImg(plan.img),0,0,W,H);
+    const vis=PV.vis.slice().sort((a,b)=>(b.faint?1:0)-(a.faint?1:0));
+    for(const v of vis){
+      const col=MARK_KINDS[v.kind].color; g.globalAlpha=v.faint?0.35:1;
+      for(const sh of (v.m.shapes||[])){
+        if(sh.t==='fill'){ g.drawImage(await pvLoadImg(sh.img), sh.x*W, sh.y*H, sh.w*W, sh.h*H); }
+        else if(sh.t==='rect'){ g.fillStyle=col; g.globalAlpha=v.faint?0.1:0.28; g.fillRect(sh.x*W,sh.y*H,sh.w*W,sh.h*H); g.globalAlpha=v.faint?0.35:1; g.strokeStyle=col; g.lineWidth=M*0.0022; g.strokeRect(sh.x*W,sh.y*H,sh.w*W,sh.h*H); }
+        else if(sh.t==='line'){ g.globalAlpha=v.faint?0.2:0.5; g.strokeStyle=col; g.fillStyle=col; g.lineWidth=(sh.w||0.012)*M; g.lineCap='round'; g.lineJoin='round';
+          if(sh.pts.length<2){ g.beginPath(); g.arc(sh.pts[0][0]*W,sh.pts[0][1]*H,g.lineWidth/2,0,7); g.fill(); }
+          else { g.beginPath(); sh.pts.forEach((q,i)=>i?g.lineTo(q[0]*W,q[1]*H):g.moveTo(q[0]*W,q[1]*H)); g.stroke(); }
+          g.globalAlpha=v.faint?0.35:1; }
+      }
+      g.globalAlpha=1;
+    }
+    const r=M*0.011; let n=0;
+    g.font=`bold ${Math.round(r*1.15)}px sans-serif`; g.textAlign='center'; g.textBaseline='middle';
+    for(const v of vis){
+      if(v.faint) continue; n++;
+      const a=markAnchor(v.m); if(!a) continue;
+      const pin=v.m.shapes[0].t==='pin'; const x=a.x*W, y=a.y*H-(pin?r*1.9:0);
+      const col=MARK_KINDS[v.kind].color;
+      if(pin){ g.fillStyle=col; g.beginPath(); g.moveTo(x-r*0.55,y+r*0.6); g.lineTo(x+r*0.55,y+r*0.6); g.lineTo(x,a.y*H); g.closePath(); g.fill(); }
+      g.fillStyle=col; g.strokeStyle='#fff'; g.lineWidth=r*0.18; g.beginPath(); g.arc(x,y,r,0,7); g.fill(); g.stroke();
+      g.fillStyle='#fff'; g.fillText(PV.mode==='edit'?String(n):MARK_KINDS[v.kind].icon,x,y+r*0.05);
+    }
+    const blob=await new Promise(res=>c.toBlob(res,'image/png'));
+    const file=new File([blob],`${plan.name}.png`,{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:plan.name}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=file.name; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },500);
+    toast('התמונה נשמרה');
+  }catch(err){ console.error(err); toast('שגיאה ביצירת התמונה'); }
+}
+window.addEventListener('resize',()=>{ if(document.getElementById('pvStage')) pvFit(); });
+
 /* ============================== MODAL HELPERS ============================== */
 function closeModal(){
   if(navStack.length && navStack[navStack.length-1].kind==='modal'){
@@ -4010,6 +4759,7 @@ async function submitReportForm(form){
     workTypeQty,
     description: fd.get('description')||'',
     locationIds: draft.locationIds.slice(),
+    marks: (draft.marks||[]).slice(),
     locationTexts: draft.locationTexts.slice(),
     locationSplitMode: ((draft.locationIds.length+draft.locationTexts.length)>1) ? draft.locationSplitMode : 'even',
     locationHours,
@@ -4073,6 +4823,56 @@ document.addEventListener('click', async (e)=>{
     case 'doExport': doExport(); break;
     case 'doExportPdf': doExportPdf(); break;
     case 'closeModal': closeModal(); break;
+    case 'planOpen': pvOpen({mode:'browse', planId:action.getAttribute('data-id')}); break;
+    case 'planEdit': openPlanEdit(action.getAttribute('data-id')); break;
+    case 'planEditSave': {
+      const pl=byId(DB.plans,action.getAttribute('data-id'));
+      const nm=(document.getElementById('planEditName').value||'').trim();
+      if(!nm){ toast('נא להזין שם'); break; }
+      pl.name=nm; pl.locationId=document.getElementById('planEditLoc').value||'';
+      await saveCollection('plans'); closeModal(); break;
+    }
+    case 'planDelete': {
+      const id=action.getAttribute('data-id'); const pl=byId(DB.plans,id); if(!pl) break;
+      const used=collectPlanMarks(id);
+      if(!(await showConfirm('למחוק את התוכנית "'+pl.name+'"?'+(used.length?' '+used.length+' סימונים שלה יימחקו מהרשומות (הרשומות עצמן יישארו).':''),{danger:true,okLabel:'מחיקה'}))) break;
+      const touched=new Set();
+      used.forEach(o=>{ o.rec.marks=(o.rec.marks||[]).filter(m=>m.planId!==id); touched.add(o.kind); });
+      const colOf={report:'reports',exception:'exceptions',damage:'damages',task:'tasks'};
+      for(const k of touched) await saveCollection(colOf[k]);
+      DB.plans=DB.plans.filter(x=>x.id!==id); await saveCollection('plans');
+      render(); break;
+    }
+    case 'openMarkOnPlan': openMarkOnPlan(action.getAttribute('data-kind')); break;
+    case 'pvOpenEdit': pvOpen({mode:'edit', kind:action.getAttribute('data-kind'), planId:action.getAttribute('data-id')}); break;
+    case 'pvEditMark': {
+      const kind=action.getAttribute('data-kind'); const m=(marksDraft(kind).marks||[])[parseInt(action.getAttribute('data-idx'),10)];
+      if(!m) break;
+      if(!byId(DB.plans,m.planId)){ toast('התוכנית של הסימון הזה נמחקה'); break; }
+      pvOpen({mode:'edit', kind, planId:m.planId, cur:m.id}); break;
+    }
+    case 'removeMark': {
+      const d=marksDraft(action.getAttribute('data-kind')); d.marks.splice(parseInt(action.getAttribute('data-idx'),10),1); render(); break;
+    }
+    case 'pvTool': PV.tool=action.getAttribute('data-tool'); pvRenderPanel(); break;
+    case 'pvDone': closeModal(); break;
+    case 'pvFit': pvFit(); break;
+    case 'pvExport': pvExportPng(); break;
+    case 'pvUndo': pvUndo(); break;
+    case 'pvNewMark': PV.cur=null; pvRefresh(); break;
+    case 'pvDelMark': pvDeleteCur(); break;
+    case 'pvFilter': { const k=action.getAttribute('data-kind'); PV.filter[k]=!PV.filter[k]; PV.sel=null; pvRefresh(); break; }
+    case 'pvOpenRecord': {
+      const kind=action.getAttribute('data-kind'), id=action.getAttribute('data-id');
+      closeModal();
+      setTimeout(()=>{
+        if(kind==='report'){ state.formDraft=null; go({name:'addReport', editId:id}); }
+        else if(kind==='exception'){ state.excFormDraft=null; go({name:'exceptionForm', editId:id}); }
+        else if(kind==='damage'){ state.dmgFormDraft=null; go({name:'damageForm', editId:id}); }
+        else { state.taskFormDraft=null; go({name:'taskForm', editId:id}); }
+      },180);
+      break;
+    }
     case 'noop': break;
     case 'manualCheckUpdate': checkForUpdate(true); break;
     case 'dialogResolve': {
@@ -4228,6 +5028,48 @@ document.addEventListener('click', async (e)=>{
     }
 
     case 'openLocationPicker': openLocationPicker(); break;
+    case 'repLocDrill': { state._repLocPath = locNodePath(action.getAttribute('data-id')).map(n=>n.id); renderLocationPickerModal(''); break; }
+    case 'repLocUp': { state._repLocPath.pop(); renderLocationPickerModal(''); break; }
+    case 'repLocRoot': { state._repLocPath = []; renderLocationPickerModal(''); break; }
+    case 'repLocUnselect': {
+      const id = action.getAttribute('data-id');
+      const draft = state.formDraft;
+      draft.locationIds = draft.locationIds.filter(x=>x!==id);
+      delete draft.locationHours['id:'+id]; delete draft.locationQty['id:'+id];
+      renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : '');
+      break;
+    }
+    case 'repLocAdd': {
+      const path = state._repLocPath||[];
+      const parentId = path.length ? path[path.length-1] : null;
+      const where = path.length ? ' בתוך: '+path.map(id=>locNodeLabel(id).split(' › ').pop()).join(' › ') : '';
+      const name = await showPrompt('מיקום חדש'+where, '', 'למשל: קומה 1 > חדר חשמל > קיר ימני');
+      if(name && name.trim()){
+        const leaf = await addLocationChain(parentId, name);
+        if(leaf && !state.formDraft.locationIds.includes(leaf)) state.formDraft.locationIds.push(leaf);
+        toast('המיקום נוסף ונבחר');
+      }
+      renderLocationPickerModal('');
+      break;
+    }
+    case 'repLocEdit': { await renameLocationNode(action.getAttribute('data-id')); renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : ''); break; }
+    case 'repLocDelete': { await deleteLocationNode(action.getAttribute('data-id')); renderLocationPickerModal(document.getElementById('locationSearchInput') ? document.getElementById('locationSearchInput').value : ''); break; }
+    case 'setLocRollup': { state.locRollup = parseInt(action.getAttribute('data-val'),10)||0; render(); break; }
+    case 'locMgrAdd': {
+      const parent = action.getAttribute('data-parent') || null;
+      const name = await showPrompt(parent ? 'תת-מיקום בתוך: '+locNodeLabel(parent) : 'מיקום ראשי חדש', '', 'למשל: בניין דרומי > קומה 1 > חדר חשמל');
+      if(name && name.trim()){ await addLocationChain(parent, name); toast('נוסף'); }
+      render();
+      break;
+    }
+    case 'locMgrRename': { await renameLocationNode(action.getAttribute('data-id')); render(); break; }
+    case 'locMgrDelete': { await deleteLocationNode(action.getAttribute('data-id')); render(); break; }
+    case 'locMgrActivate': {
+      const n = byId(DB.exceptionLocations, action.getAttribute('data-id'));
+      if(n){ n.active = true; await saveCollection('exceptionLocations'); }
+      render();
+      break;
+    }
     case 'toggleLocation': {
       const id = action.getAttribute('data-id');
       const draft = state.formDraft;
@@ -4341,30 +5183,16 @@ document.addEventListener('click', async (e)=>{
     case 'excLocUp': { state._excLocPath.pop(); renderExcLocationPickerModal(); break; }
     case 'excLocRoot': { state._excLocPath = []; renderExcLocationPickerModal(); break; }
     case 'excLocAdd': {
-      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1, חדר משרדי הנהלה');
+      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1 > חדר חשמל > קיר ימני');
       if(name && name.trim()){
         const parentId = state._excLocPath.length ? state._excLocPath[state._excLocPath.length-1] : null;
-        const siblingCount = DB.exceptionLocations.filter(x=>x.parentId===parentId).length;
-        DB.exceptionLocations.push({id:uid(), name:name.trim(), parentId, active:true, order:siblingCount, createdAt:Date.now()});
-        await saveCollection('exceptionLocations');
+        const leaf = await addLocationChain(parentId, name);
+        if(leaf && /[>›]/.test(name)) state._excLocPath = locNodePath(leaf).map(n=>n.id); // typed a full path: jump to its end
       }
       renderExcLocationPickerModal();
       break;
     }
-    case 'excLocDelete': {
-      const id = action.getAttribute('data-id');
-      const hasKids = DB.exceptionLocations.some(x=>x.parentId===id && x.active);
-      if(hasKids){ toast('לא ניתן למחוק מיקום שיש לו תתי-מיקום — מחק קודם אותם'); break; }
-      const used = isEntityUsed('exceptionLocations', id);
-      const msg = used ? 'המיקום בשימוש בחריגים קיימים. למחוק בכל זאת? (בחריגים קיימים יוצג "נמחק")' : 'למחוק את תת-המיקום?';
-      if(await showConfirm(msg, {danger:true, okLabel:'מחיקה'})){
-        DB.exceptionLocations = DB.exceptionLocations.filter(x=>x.id!==id);
-        await saveCollection('exceptionLocations');
-        state._excLocPath = state._excLocPath.filter(x=>x!==id);
-      }
-      renderExcLocationPickerModal();
-      break;
-    }
+    case 'excLocDelete': { await deleteLocationNode(action.getAttribute('data-id')); renderExcLocationPickerModal(); break; }
     case 'excLocEdit': { await renameLocationNode(action.getAttribute('data-id')); renderExcLocationPickerModal(); break; }
     case 'dmgLocEdit': { await renameLocationNode(action.getAttribute('data-id')); renderDmgLocationPickerModal(); break; }
     case 'excLocConfirm': {
@@ -4415,30 +5243,16 @@ document.addEventListener('click', async (e)=>{
     case 'dmgLocUp': { state._dmgLocPath.pop(); renderDmgLocationPickerModal(); break; }
     case 'dmgLocRoot': { state._dmgLocPath = []; renderDmgLocationPickerModal(); break; }
     case 'dmgLocAdd': {
-      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1, חדר משרדי הנהלה');
+      const name = await showPrompt('שם תת-המיקום', '', 'למשל: קומה 1 > חדר חשמל > קיר ימני');
       if(name && name.trim()){
         const parentId = state._dmgLocPath.length ? state._dmgLocPath[state._dmgLocPath.length-1] : null;
-        const siblingCount = DB.exceptionLocations.filter(x=>x.parentId===parentId).length;
-        DB.exceptionLocations.push({id:uid(), name:name.trim(), parentId, active:true, order:siblingCount, createdAt:Date.now()});
-        await saveCollection('exceptionLocations');
+        const leaf = await addLocationChain(parentId, name);
+        if(leaf && /[>›]/.test(name)) state._dmgLocPath = locNodePath(leaf).map(n=>n.id);
       }
       renderDmgLocationPickerModal();
       break;
     }
-    case 'dmgLocDelete': {
-      const id = action.getAttribute('data-id');
-      const hasKids = DB.exceptionLocations.some(x=>x.parentId===id && x.active);
-      if(hasKids){ toast('לא ניתן למחוק מיקום שיש לו תתי-מיקום — מחק קודם אותם'); break; }
-      const used = isEntityUsed('exceptionLocations', id);
-      const msg = used ? 'המיקום בשימוש בחריגים/נזקים קיימים. למחוק בכל זאת?' : 'למחוק את תת-המיקום?';
-      if(await showConfirm(msg, {danger:true, okLabel:'מחיקה'})){
-        DB.exceptionLocations = DB.exceptionLocations.filter(x=>x.id!==id);
-        await saveCollection('exceptionLocations');
-        state._dmgLocPath = state._dmgLocPath.filter(x=>x!==id);
-      }
-      renderDmgLocationPickerModal();
-      break;
-    }
+    case 'dmgLocDelete': { await deleteLocationNode(action.getAttribute('data-id')); renderDmgLocationPickerModal(); break; }
     case 'dmgLocConfirm': {
       const path = state._dmgLocPath.slice();
       if(path.length){
@@ -4609,6 +5423,7 @@ document.addEventListener('click', async (e)=>{
         title: draft.title||'',
         categoryId: draft.categoryId||'',
         locationPathIds: (draft.locationPathIds||[]).slice(),
+        marks: (draft.marks||[]).slice(),
         priority: draft.priority || null,
         order: existing ? (existing.order ?? DB.tasks.length) : DB.tasks.length,
         createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
@@ -4645,7 +5460,13 @@ document.addEventListener('click', async (e)=>{
     }
     case 'reorderEntity': {
       const type = action.getAttribute('data-type'); const id = action.getAttribute('data-id'); const dir = action.getAttribute('data-dir');
-      const list = DB[type].slice().sort((a,b)=>(a.order??0)-(b.order??0));
+      let list = DB[type].slice().sort((a,b)=>(a.order??0)-(b.order??0));
+      if(type==='exceptionLocations'){
+        const me = byId(DB[type], id);
+        if(!me) break;
+        list = list.filter(x=>(x.parentId||null)===(me.parentId||null) && x.active);
+        list.forEach((x,i)=>{ x.order = i; }); // siblings had colliding order numbers across branches
+      }
       const idx = list.findIndex(x=>x.id===id);
       const swapIdx = dir==='up' ? idx-1 : idx+1;
       if(swapIdx<0 || swapIdx>=list.length) break;
@@ -4672,6 +5493,7 @@ document.addEventListener('click', async (e)=>{
 });
 
 document.addEventListener('change', async (e)=>{
+  if(e.target.id==='planFileInput'){ const files=[...e.target.files]; e.target.value=''; handlePlanFiles(files); return; }
   if(e.target.id==='historySearch'){ /* handled on input below */ }
   if(e.target.id==='periodDate'){ state.reportsPeriod.date = e.target.value; render(); }
   if(e.target.id==='dashPeriodDate'){ state.dashPeriod.date = e.target.value; render(); }
@@ -4749,6 +5571,8 @@ document.addEventListener('change', async (e)=>{
 });
 
 document.addEventListener('input', (e)=>{
+  if(e.target.id==='pvNote'){ const m=pvCurMark(); if(m) m.note=e.target.value; return; }
+  if(e.target.id==='pvPen'){ PV.penW=parseFloat(e.target.value)||0.012; return; }
   if(e.target.id==='historySearch'){
     state.historyFilters.text = e.target.value;
     // debounce-lite: re-render list only, keep focus
