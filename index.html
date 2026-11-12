@@ -485,7 +485,7 @@ function toast(msg){
    APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
    screen in Settings. This is the only reliable signal, since the phone/browser can
    otherwise silently keep serving an old cached copy. */
-const APP_VERSION = "1.2.3";
+const APP_VERSION = "1.2.4";
 let _lastCheckedVersion = null;
 async function checkForUpdate(manual=false){
   try{
@@ -1307,8 +1307,8 @@ function workersFieldHtml(holder){
   </div>`;
 }
 // Removing a worker always asks first (red warning) so it can't happen by accident.
-async function confirmRemoveWorker(id){
-  return showConfirm(`להסיר את "${workerName(id)}" מהרשימה?`, {red:true, title:'⚠️ הסרת עובד', okLabel:'כן, הסר', cancelLabel:'ביטול'});
+async function confirmDeleteWorker(id){
+  return showConfirm(`למחוק את העובד "${workerName(id)}" מכל האפליקציה?\nהוא יימחק מרשימת העובדים בכל המסכים.\nהדיווחים הקיימים לא יימחקו (בהם יוצג "(נמחק)" במקום שמו).`, {red:true, title:'⚠️ מחיקת עובד', okLabel:'כן, מחק עובד', cancelLabel:'ביטול'});
 }
 function renderWorkerPickerModal(search){
   const draft = state[state._workerHolder || 'formDraft'];
@@ -1332,6 +1332,7 @@ function renderWorkerPickerModal(search){
               return `<div class="msel-row ${checked?'checked':''}" data-action="toggleWorker" data-id="${w.id}">
                 <div class="msel-check">${checked?'✓':''}</div>
                 <div class="lbl">${esc(w.name)}</div>
+                <button type="button" class="btn btn-danger btn-sm" style="flex:0 0 auto;padding:4px 10px;" data-action="deleteWorkerGlobal" data-id="${w.id}">🗑 מחק</button>
               </div>`;
             }).join('')
           }
@@ -5036,6 +5037,16 @@ document.addEventListener('click', async (e)=>{
     case 'openQuickAdd': openQuickAdd(action.getAttribute('data-kind')); break;
 
     case 'openWorkerPicker': openWorkerPicker(action.getAttribute('data-holder')); break;
+    case 'deleteWorkerGlobal': {
+      const id = action.getAttribute('data-id');
+      if(!(await confirmDeleteWorker(id))){ renderWorkerPickerModal(''); break; }
+      DB.workers = DB.workers.filter(w=>w.id!==id);
+      await saveCollection('workers');
+      ['formDraft','excFormDraft','dmgFormDraft','taskFormDraft'].forEach(h=>{ const d=state[h]; if(d && d.workerIds) d.workerIds = d.workerIds.filter(x=>x!==id); });
+      toast('העובד נמחק');
+      renderWorkerPickerModal('');
+      break;
+    }
     case 'addNewWorkerInPicker': {
       const draft = state[state._workerHolder || 'formDraft'];
       const nm = await showPrompt('שם העובד החדש', '', 'שם מלא');
@@ -5056,7 +5067,6 @@ document.addEventListener('click', async (e)=>{
       const searchVal = document.getElementById('workerSearchInput') ? document.getElementById('workerSearchInput').value : '';
       const i = draft.workerIds.indexOf(id);
       if(i>=0){
-        if(state._workerInitial && state._workerInitial.has(id) && !(await confirmRemoveWorker(id))){ renderWorkerPickerModal(searchVal); break; }
         draft.workerIds.splice(i,1);
       } else draft.workerIds.push(id);
       renderWorkerPickerModal(searchVal);
@@ -5065,7 +5075,6 @@ document.addEventListener('click', async (e)=>{
     case 'removeWorkerChip': {
       const id = action.getAttribute('data-id');
       const draft = state[action.getAttribute('data-holder') || 'formDraft'];
-      if(!(await confirmRemoveWorker(id))) { render(); break; }
       draft.workerIds = draft.workerIds.filter(x=>x!==id);
       render();
       break;
