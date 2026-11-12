@@ -215,6 +215,9 @@ select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns=
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
 .btn-outline:active{background:var(--surface-2);}
 .btn-danger{background:var(--red-dim);color:#a8232e;border:1px solid #f0c1c4;}
+.btn-danger-solid{background:#d32f2f;color:#fff;border:1px solid #b71c1c;font-weight:800;}
+.dialog-red .sheet{border-top:6px solid #d32f2f;}
+.dialog-red .sheet-head h3{color:#d32f2f;}
 .btn-ghost{background:transparent;color:var(--text-dim);}
 .btn-sm{padding:8px 12px;font-size:13px;width:auto;}
 .btnrow{display:flex;gap:8px;}
@@ -482,7 +485,7 @@ function toast(msg){
    APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
    screen in Settings. This is the only reliable signal, since the phone/browser can
    otherwise silently keep serving an old cached copy. */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 let _lastCheckedVersion = null;
 async function checkForUpdate(manual=false){
   try{
@@ -1170,7 +1173,7 @@ function viewReportForm(editId, duplicateFrom){
     const rep = byId(DB.reports, duplicateFrom);
     draft = Object.assign(blankReport(), JSON.parse(JSON.stringify(rep)));
     draft.hours = fmtHM(draft.hours);
-    draft.id = null; draft.date = todayStr();
+    draft.id = null; draft.date = todayStr(); draft.marks = [];
     draft._formKey = duplicateFrom;
   } else {
     draft = blankReport();
@@ -1197,7 +1200,7 @@ function viewReportForm(editId, duplicateFrom){
             ${draft.workerIds.length ? 'ערוך בחירת עובדים' : 'בחר עובדים…'}
           </button>
           <div class="chipset">
-            ${draft.workerIds.map(id=>`<span class="chip">${esc(workerName(id))} <span class="x" data-action="removeWorkerChip" data-id="${id}">×</span></span>`).join('')}
+            ${draft.workerIds.map(id=>`<span class="chip">${esc(workerName(id))} <span class="x" data-action="removeWorkerChip" data-holder="formDraft" data-id="${id}">×</span></span>`).join('')}
           </div>
         </div>
 
@@ -1286,13 +1289,28 @@ function viewReportForm(editId, duplicateFrom){
 }
 
 /* ============================== WORKER PICKER MODAL ============================== */
-function openWorkerPicker(){
+function openWorkerPicker(holder){
+  state._workerHolder = holder || 'formDraft';
   pushModalHistory();
   const search = "";
   renderWorkerPickerModal(search);
 }
+// Generic "workers" field for exception / damage / task forms (report form has its own markup).
+function workersFieldHtml(holder){
+  const d = state[holder]; const ids = (d && d.workerIds) || [];
+  return `<div class="field">
+    <label>עובדים (אופציונלי${ids.length?' · '+ids.length+' נבחרו':''})</label>
+    <button type="button" class="selectbtn ${ids.length?'':'placeholder'}" data-action="openWorkerPicker" data-holder="${holder}">${ids.length ? 'ערוך בחירת עובדים' : 'בחר עובדים…'}</button>
+    ${ids.length ? `<div class="chipset" style="margin-top:8px;">${ids.map(id=>`<span class="chip">${esc(workerName(id))} <span class="x" data-action="removeWorkerChip" data-holder="${holder}" data-id="${id}">×</span></span>`).join('')}</div>` : ''}
+  </div>`;
+}
+// Removing a worker always asks first (red warning) so it can't happen by accident.
+async function confirmRemoveWorker(id){
+  return showConfirm(`להסיר את "${workerName(id)}" מהרשימה?`, {red:true, title:'⚠️ הסרת עובד', okLabel:'כן, הסר', cancelLabel:'ביטול'});
+}
 function renderWorkerPickerModal(search){
-  const draft = state.formDraft;
+  const draft = state[state._workerHolder || 'formDraft'];
+  if(!draft.workerIds) draft.workerIds = [];
   const workers = activeOf(DB.workers).filter(w=>smartMatch(w.name, search));
   const html = `
     <div class="overlay" id="workerModalOverlay">
@@ -2247,7 +2265,7 @@ function viewEntityManagerInline(type){
 /* ============================== EXCEPTIONS (חריגים) MODULE ============================== */
 function blankException(){
   return { id:null, number:null, date: todayStr(), title:'', categoryId:'', locationPathIds:[],
-    photosBefore:[], photosDuring:[], photosAfter:[], documents:[], cost:'', linkedReportId:null, notes:'', marks:[] };
+    photosBefore:[], photosDuring:[], photosAfter:[], documents:[], cost:'', linkedReportId:null, notes:'', marks:[], workerIds:[] };
 }
 const excCategoryName = id => { if(!id) return "—"; const c=byId(DB.exceptionCategories,id); return c? c.name : "(נמחק)"; };
 function excLocationPathLabel(ids){
@@ -2347,6 +2365,7 @@ function viewExceptionForm(editId){
           ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
         </button>
       </div>
+      ${workersFieldHtml('excFormDraft')}
       ${marksFieldHtml('exception')}
       <div class="field">
         <label>עלות משוערת (אופציונלי, ₪)</label>
@@ -2393,6 +2412,7 @@ async function submitExceptionForm(form){
     categoryId: draft.categoryId || '',
     locationPathIds: draft.locationPathIds.slice(),
     marks: (draft.marks||[]).slice(),
+    workerIds: (draft.workerIds||[]).slice(),
     photosBefore: (draft.photosBefore||[]).slice(),
     photosDuring: (draft.photosDuring||[]).slice(),
     photosAfter: (draft.photosAfter||[]).slice(),
@@ -2586,6 +2606,7 @@ function blankDamage(){
     occurredDate:'', occurredTime:'',
     locationPaths: [],
     marks: [],
+    workerIds: [],
     categoryId:'',
     causedBy:'', causedByText:'',
     description:'',
@@ -2798,6 +2819,7 @@ function viewDamageForm(editId){
       </div>
 
       ${dmgLocationsField()}
+      ${workersFieldHtml('dmgFormDraft')}
       ${marksFieldHtml('damage')}
 
       <div class="field">
@@ -2890,6 +2912,7 @@ async function submitDamageForm(form){
     occurredTime: fd.get('occurredTime') || '',
     locationPaths: (draft.locationPaths||[]).map(p=>p.slice()),
     marks: (draft.marks||[]).slice(),
+    workerIds: (draft.workerIds||[]).slice(),
     categoryId: draft.categoryId || '',
     causedBy: fd.get('causedBy') || '',
     causedByText: fd.get('causedByText') || '',
@@ -3054,7 +3077,7 @@ function renderDmgLinkPickerModal(search){
 const PRIORITY_COLORS = {1:'#c8434c', 2:'#e0752e', 3:'#d9a812', 4:'#3f9142', 5:'#2f6fb0', 6:'#7a5aa8'};
 const taskCategoryName = id => { if(!id) return "—"; const c=byId(DB.taskCategories,id); return c? c.name : "(נמחק)"; };
 function blankTask(){
-  return { id:null, done:false, contentHtml:'', title:'', categoryId:'', locationPathIds:[], priority:null, marks:[] };
+  return { id:null, done:false, contentHtml:'', title:'', categoryId:'', locationPathIds:[], priority:null, marks:[], workerIds:[] };
 }
 function taskRow(t){
   const showColors = state.taskShowPriorityColors;
@@ -3130,6 +3153,7 @@ function viewTaskForm(editId){
           ${draft.locationPathIds.length ? esc(locLabel) : 'בחר מיקום…'}
         </button>
       </div>
+      ${workersFieldHtml('taskFormDraft')}
       ${marksFieldHtml('task')}
 
       <div class="field">
@@ -4145,7 +4169,7 @@ function pvOpen(opts){
   const d = opts.mode==='edit' ? marksDraft(opts.kind) : null;
   if(opts.mode==='edit' && !d){ toast('אין רשומה פתוחה'); return; }
   if(d && !d.marks) d.marks=[];
-  Object.assign(PV,{mode:opts.mode, kind:opts.kind||null, planId:plan.id, plan, tool: opts.mode==='edit'?'pin':'pan', cur:opts.cur||null, sel:null,
+  Object.assign(PV,{mode:opts.mode, kind:opts.kind||null, planId:plan.id, plan, tool: opts.mode==='edit'?'pin':'pan', cur:opts.cur||null, selIdx:(opts.cur?0:-1), mv:null, fillData:new WeakMap(), sel:null,
     view:{s:1,x:0,y:0}, pw:plan.w, ph:plan.h, penW:0.012, filter:{report:true,exception:true,damage:true,task:true},
     fillCache:null, pointers:new Map(), g:null, pinch:null, draw:null, chips:[], vis:[], fit:1});
   const root=document.getElementById('modalRoot');
@@ -4170,7 +4194,6 @@ function pvVisibleMarks(){
   const out=[];
   if(PV.mode==='edit'){
     const d=marksDraft(PV.kind);
-    collectPlanMarks(PV.planId).forEach(o=>{ if(d && d._editId && o.rec.id===d._editId && o.kind===PV.kind) return; out.push({m:o.m,kind:o.kind,rec:o.rec,faint:true,editable:false}); });
     (d.marks||[]).forEach(m=>{ if(m.planId===PV.planId) out.push({m,kind:PV.kind,rec:d,editable:true}); });
   } else {
     collectPlanMarks(PV.planId).forEach(o=>{ if(PV.filter[o.kind]) out.push({m:o.m,kind:o.kind,rec:o.rec,editable:false}); });
@@ -4201,7 +4224,7 @@ function pvRefresh(){ pvRenderShapes(); pvRenderPanel(); }
 function pvRenderShapes(){
   const svg=document.getElementById('pvSvg'); if(!svg) return;
   PV.vis = pvVisibleMarks();
-  svg.innerHTML = PV.vis.map(v=>pvShapesSvg(v.m, MARK_KINDS[v.kind].color, !!v.faint, (v.editable&&PV.cur===v.m.id)||(PV.sel&&PV.sel.m===v.m))).join('') + '<g id="pvPrev"></g>';
+  svg.innerHTML = PV.vis.map(v=>pvShapesSvg(v.m, MARK_KINDS[v.kind].color, !!v.faint, (v.editable&&PV.cur===v.m.id)||(PV.sel&&PV.sel.m===v.m))).join('') + pvSelBoxSvg() + '<g id="pvPrev"></g>';
   pvRenderChips();
 }
 function pvEditNumber(mid){ const list=PV.vis.filter(v=>v.editable); return list.findIndex(v=>v.m.id===mid)+1; }
@@ -4239,7 +4262,7 @@ function pvDown(e){
   const r=st.getBoundingClientRect();
   PV.pointers.set(e.pointerId,{x:e.clientX-r.left,y:e.clientY-r.top});
   if(PV.pointers.size===2){
-    PV.draw=null; pvClearPreview(); PV.g=null;
+    PV.draw=null; PV.mv=null; pvClearPreview(); PV.g=null;
     const [a,b]=[...PV.pointers.values()];
     PV.pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1, mx:(a.x+b.x)/2, my:(a.y+b.y)/2, view:{...PV.view}};
     return;
@@ -4247,6 +4270,11 @@ function pvDown(e){
   if(PV.pointers.size>2) return;
   const p=PV.pointers.get(e.pointerId);
   PV.g={id:e.pointerId,sx:p.x,sy:p.y,x:p.x,y:p.y,t:Date.now(),moved:0,view:{...PV.view}};
+  PV.mv=null;
+  if(PV.mode==='edit'){
+    const ss=pvSelShape();
+    if(ss && pvHitShape(ss,p.x,p.y)>=0){ PV.mv={orig:pvSnap(ss), n0:pvNorm(pvScreenToWorld(e.clientX,e.clientY)), did:false}; return; }
+  }
   if(PV.mode==='edit' && (PV.tool==='rect'||PV.tool==='marker')){
     const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
     PV.draw = PV.tool==='rect' ? {t:'rect',x0:n.x,y0:n.y,x1:n.x,y1:n.y} : {t:'line',pts:[[n.x,n.y]]};
@@ -4265,6 +4293,10 @@ function pvMove(e){
   }
   const g=PV.g; if(!g||g.id!==e.pointerId) return;
   g.moved=Math.max(g.moved,Math.hypot(p.x-g.sx,p.y-g.sy)); g.x=p.x; g.y=p.y;
+  if(PV.mv){
+    if(g.moved>6){ const ss=pvSelShape(); if(ss){ const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY)); pvTranslate(ss,PV.mv.orig,n.x-PV.mv.n0.x,n.y-PV.mv.n0.y); PV.mv.did=true; pvRenderShapes(); } }
+    return;
+  }
   if(PV.draw){
     const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
     if(PV.draw.t==='rect'){ PV.draw.x1=n.x; PV.draw.y1=n.y; }
@@ -4280,30 +4312,116 @@ function pvUp(e){
   if(!g||g.id!==e.pointerId) return;
   PV.g=null;
   const tap = g.moved<8 && Date.now()-g.t<700;
-  if(PV.draw){
-    const d=PV.draw; PV.draw=null; pvClearPreview();
-    if(d.t==='rect'){
-      const w=Math.abs(d.x1-d.x0), h=Math.abs(d.y1-d.y0);
-      if(w*PV.pw*PV.view.s>10 && h*PV.ph*PV.view.s>10) pvAddShape({t:'rect',x:Math.min(d.x0,d.x1),y:Math.min(d.y0,d.y1),w,h});
+  const mv=PV.mv; PV.mv=null;
+  if(mv && mv.did){ pvRefresh(); return; }
+  const dr=PV.draw; PV.draw=null; pvClearPreview();
+  if(dr && !tap){
+    if(dr.t==='rect'){
+      const w=Math.abs(dr.x1-dr.x0), h=Math.abs(dr.y1-dr.y0);
+      if(w*PV.pw*PV.view.s>10 && h*PV.ph*PV.view.s>10) pvAddShape({t:'rect',x:Math.min(dr.x0,dr.x1),y:Math.min(dr.y0,dr.y1),w,h});
       else toast('גרור באלכסון כדי לסמן אזור');
     } else {
-      pvAddShape({t:'line',pts:d.pts.map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)]),w:PV.penW});
+      pvAddShape({t:'line',pts:dr.pts.map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)]),w:PV.penW});
     }
     return;
   }
   if(!tap) return;
-  const hit=pvHitChip(g.x,g.y);
-  if(hit){ pvSelectChip(hit); return; }
-  if(PV.mode!=='edit'){ PV.sel=null; pvRefresh(); return; }
+  if(PV.mode!=='edit'){
+    const hit=pvHitChip(g.x,g.y);
+    if(hit){ pvSelectChip(hit); return; }
+    PV.sel=null; pvRefresh(); return;
+  }
+  // edit mode: tapping an existing mark selects it (to move / resize / delete); tapping empty space adds a new one
+  const h=pvHitEditable(g.x,g.y);
+  if(h){ PV.cur=h.m.id; PV.selIdx=h.i; pvRefresh(); return; }
   const n=pvNorm(pvScreenToWorld(e.clientX,e.clientY));
   if(PV.tool==='pin') pvAddShape({t:'pin',x:+n.x.toFixed(4),y:+n.y.toFixed(4)});
+  else if(PV.tool==='marker') pvAddShape({t:'line',pts:[[+n.x.toFixed(4),+n.y.toFixed(4)]],w:PV.penW});
+  else if(PV.tool==='rect') toast('גרור באלכסון כדי לסמן אזור');
   else if(PV.tool==='room'){
     const res=pvFloodFill(n.x,n.y);
     if(res.err==='wall') toast('לחץ בתוך החדר, לא על קו');
     else if(res.err==='leak') toast('החדר לא סגור (חסר קיר או דלת פתוחה). נסה 🖍 קיר או ▭ מלבן');
     else if(res.err==='tiny') toast('האזור קטן מדי — נסה סיכה');
     else if(res.shape) pvAddShape(res.shape);
+  } else if(PV.cur){ PV.cur=null; PV.selIdx=-1; pvRefresh(); }
+}
+/* ---- selecting / moving / resizing individual shapes ---- */
+const pvToScreen = (nx,ny) => ({x:nx*PV.pw*PV.view.s+PV.view.x, y:ny*PV.ph*PV.view.s+PV.view.y});
+function pvSelShape(){ const m=pvCurMark(); return (m && PV.selIdx>=0) ? (m.shapes[PV.selIdx]||null) : null; }
+function pvSnap(sh){ return sh.t==='line' ? {pts:sh.pts.map(q=>q.slice())} : {x:sh.x,y:sh.y}; }
+function pvTranslate(sh,o,dx,dy){
+  if(sh.t==='line') sh.pts=o.pts.map(q=>[+(q[0]+dx).toFixed(4),+(q[1]+dy).toFixed(4)]);
+  else if(sh.t==='pin'){ sh.x=+Math.max(0,Math.min(1,o.x+dx)).toFixed(4); sh.y=+Math.max(0,Math.min(1,o.y+dy)).toFixed(4); }
+  else { sh.x=+(o.x+dx).toFixed(5); sh.y=+(o.y+dy).toFixed(5); }
+}
+function pvShapeBox(sh){
+  if(sh.t==='pin') return {x:sh.x,y:sh.y,w:0,h:0};
+  if(sh.t==='line'){ const xs=sh.pts.map(q=>q[0]), ys=sh.pts.map(q=>q[1]); const x=Math.min(...xs), y=Math.min(...ys); return {x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y}; }
+  return {x:sh.x,y:sh.y,w:sh.w,h:sh.h};
+}
+function pvFillAlphaAt(sh,nx,ny){
+  let e=PV.fillData.get(sh);
+  if(!e){
+    e={ready:false}; PV.fillData.set(sh,e);
+    const im=new Image();
+    im.onload=()=>{ try{ const c=document.createElement('canvas'); c.width=im.naturalWidth; c.height=im.naturalHeight; const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(im,0,0); e.data=g.getImageData(0,0,c.width,c.height); e.ready=true; }catch(_){} };
+    im.src=sh.img;
   }
+  if(!e.ready) return true;
+  const u=(nx-sh.x)/sh.w, v=(ny-sh.y)/sh.h; if(u<0||v<0||u>1||v>1) return false;
+  const W=e.data.width, H=e.data.height, cx=Math.min(W-1,Math.floor(u*W)), cy=Math.min(H-1,Math.floor(v*H));
+  for(let dy=-4;dy<=4;dy+=2){ for(let dx=-4;dx<=4;dx+=2){ const x=cx+dx,y=cy+dy; if(x<0||y<0||x>=W||y>=H) continue; if(e.data.data[(y*W+x)*4+3]>0) return true; } }
+  return false;
+}
+// returns -1 when (sx,sy) [stage pixels] doesn't touch the shape; otherwise a score (smaller = more specific)
+function pvHitShape(sh,sx,sy){
+  if(sh.t==='pin'){ const p=pvToScreen(sh.x,sh.y); const d=Math.hypot(sx-p.x, sy-(p.y-21)); return (Math.abs(sx-p.x)<24 && sy>p.y-48 && sy<p.y+12) ? d : -1; }
+  if(sh.t==='line'){
+    const M=Math.max(PV.pw,PV.ph), tol=Math.max(18,(sh.w||0.012)*M*PV.view.s/2+8);
+    const P=sh.pts.map(q=>pvToScreen(q[0],q[1])); let best=1e9;
+    if(P.length===1) best=Math.hypot(sx-P[0].x,sy-P[0].y);
+    for(let i=1;i<P.length;i++){
+      const a=P[i-1], b=P[i], dx=b.x-a.x, dy=b.y-a.y, L=dx*dx+dy*dy;
+      let t=L?((sx-a.x)*dx+(sy-a.y)*dy)/L:0; t=Math.max(0,Math.min(1,t));
+      best=Math.min(best,Math.hypot(sx-(a.x+t*dx), sy-(a.y+t*dy)));
+    }
+    return best<=tol ? 100+best : -1;
+  }
+  const a=pvToScreen(sh.x,sh.y), b=pvToScreen(sh.x+sh.w,sh.y+sh.h);
+  const m=6; if(sx<a.x-m||sx>b.x+m||sy<a.y-m||sy>b.y+m) return -1;
+  if(sh.t==='fill'){ const n=pvNorm(pvScreenToWorld(sx+pvStage().getBoundingClientRect().left, sy+pvStage().getBoundingClientRect().top)); if(!pvFillAlphaAt(sh,n.x,n.y)) return -1; }
+  return 1000+Math.min(1e6,(b.x-a.x)*(b.y-a.y))/1000;
+}
+function pvHitEditable(sx,sy){
+  let best=null, bs=1e9;
+  PV.vis.forEach(v=>{ if(!v.editable) return; v.m.shapes.forEach((sh,i)=>{ const sc=pvHitShape(sh,sx,sy); if(sc>=0 && sc<=bs){ bs=sc; best={m:v.m,i,sh}; } }); });
+  return best;
+}
+function pvSelBoxSvg(){
+  const sh=pvSelShape(); if(!sh||PV.mode!=='edit'||sh.t==='pin') return '';
+  const pw=PV.pw, ph=PV.ph, M=Math.max(pw,ph), b=pvShapeBox(sh); const pad=sh.t==='line'?((sh.w||0.012)*M/2+6):0;
+  const at=`x="${b.x*pw-pad}" y="${b.y*ph-pad}" width="${b.w*pw+pad*2}" height="${b.h*ph+pad*2}" fill="none" vector-effect="non-scaling-stroke" stroke-dasharray="10 6"`;
+  return `<rect ${at} stroke="#000" stroke-opacity=".55" stroke-width="5"/><rect ${at} stroke="#fff" stroke-width="3"/>`;
+}
+function pvScaleSel(fx,fy){
+  const sh=pvSelShape(); if(!sh||sh.t==='pin') return;
+  if(sh.t==='line'){
+    const b=pvShapeBox(sh), cx=b.x+b.w/2, cy=b.y+b.h/2;
+    sh.pts=sh.pts.map(q=>[+(cx+(q[0]-cx)*fx).toFixed(4),+(cy+(q[1]-cy)*fy).toFixed(4)]);
+  } else {
+    const cx=sh.x+sh.w/2, cy=sh.y+sh.h/2;
+    sh.w=+Math.max(0.003,sh.w*fx).toFixed(5); sh.h=+Math.max(0.003,sh.h*fy).toFixed(5);
+    sh.x=+(cx-sh.w/2).toFixed(5); sh.y=+(cy-sh.h/2).toFixed(5);
+  }
+  pvRefresh();
+}
+function pvThickSel(f){ const sh=pvSelShape(); if(!sh||sh.t!=='line') return; sh.w=Math.max(0.003,Math.min(0.06,(sh.w||0.012)*f)); pvRefresh(); }
+function pvDeleteShape(){
+  const d=marksDraft(PV.kind), m=pvCurMark(); if(!m) return;
+  if(PV.selIdx>=0) m.shapes.splice(PV.selIdx,1);
+  if(!m.shapes.length) d.marks=d.marks.filter(x=>x!==m);
+  PV.cur=null; PV.selIdx=-1; pvRefresh(); toast('הסימון נמחק');
 }
 function pvHitChip(sx,sy){
   let best=null, bd=26;
@@ -4326,9 +4444,8 @@ function pvRenderPreview(){
 function pvClearPreview(){ const g=document.getElementById('pvPrev'); if(g) g.innerHTML=''; }
 function pvAddShape(sh){
   const d=marksDraft(PV.kind); if(!d.marks) d.marks=[];
-  let m = PV.cur ? d.marks.find(x=>x.id===PV.cur) : null;
-  if(!m){ m={id:uid(),planId:PV.planId,note:'',shapes:[]}; d.marks.push(m); PV.cur=m.id; }
-  m.shapes.push(sh);
+  const m={id:uid(),planId:PV.planId,note:'',shapes:[sh]};
+  d.marks.push(m); PV.cur=m.id; PV.selIdx=0;
   pvRefresh();
 }
 function pvCurMark(){ const d=marksDraft(PV.kind); return (PV.cur && d) ? (d.marks||[]).find(x=>x.id===PV.cur) : null; }
@@ -4342,8 +4459,8 @@ function pvDeleteCur(){ const d=marksDraft(PV.kind), m=pvCurMark(); if(!m) retur
 const PV_HINTS = {
   pan:'גרור להזזה · צביטה בשתי אצבעות לזום',
   pin:'לחץ על הנקודה המדויקת בתוכנית — תיתפס סיכה 📍',
-  room:'לחץ בתוך חדר — כל החדר נצבע. אפשר ללחוץ בעוד חדרים, וכולם ייכנסו לאותו סימון',
-  marker:'צייר עם האצבע לאורך הקיר — כמו מרקר. כל הקו נשמר לסימון',
+  room:'לחץ בתוך חדר — כל החדר נצבע (כל חדר = סימון נפרד)',
+  marker:'צייר עם האצבע לאורך הקיר — כמו מרקר',
   rect:'גרור באלכסון מפינה לפינה — כל המלבן מסומן (למשל פינה, קטע קיר או אזור)'
 };
 function pvRenderPanel(){
@@ -4363,10 +4480,17 @@ function pvRenderPanel(){
   el.innerHTML = `<div class="pvtools">${tools.map(([k,i,l])=>`<button type="button" class="pvtool ${PV.tool===k?'on':''}" data-action="pvTool" data-tool="${k}"><span class="i">${i}</span><span>${l}</span></button>`).join('')}</div>
     <div class="pvhint">${PV_HINTS[PV.tool]}</div>
     ${PV.tool==='marker' ? `<div class="pvrow">עובי <input type="range" id="pvPen" min="0.004" max="0.03" step="0.001" value="${PV.penW}"></div>` : ''}
-    ${m ? `<div class="pvcur"><div><b>סימון ${pvEditNumber(m.id)}</b> · ${esc(markSummary(m))}</div>
+    ${m ? (()=>{ const sh=pvSelShape(); const t=sh?sh.t:''; return `<div class="pvcur"><div><b>סימון ${pvEditNumber(m.id)}</b> · ${esc(markSummary({shapes:sh?[sh]:m.shapes}))}</div>
         <input type="text" class="pvnote" id="pvNote" placeholder="הערה — למשל: לתקן את כל הקיר הזה" value="${esc(m.note||'')}">
-        <div class="pvbtns"><button type="button" data-action="pvUndo">↶ בטל צורה אחרונה</button><button type="button" data-action="pvNewMark">＋ סימון חדש</button><button type="button" class="danger" data-action="pvDelMark">🗑 מחק סימון</button></div></div>`
-      : `<div class="pvdim">כל מה שתסמן יישמר כסימון אחד. "סימון חדש" מתחיל סימון נפרד.</div>`}`;
+        <div class="pvdim" style="margin:2px 2px 6px;">${t==='pin'?'גרור את הסיכה כדי להזיז אותה':'גרור את הצורה כדי להזיז · כפתורים להגדלה / הקטנה'}</div>
+        <div class="pvbtns">
+          ${t&&t!=='pin' ? `<button type="button" data-action="pvScale" data-fx="1.15" data-fy="1.15">＋ הגדל</button><button type="button" data-action="pvScale" data-fx="0.87" data-fy="0.87">－ הקטן</button>` : ''}
+          ${t==='rect'||t==='fill' ? `<button type="button" data-action="pvScale" data-fx="1.15" data-fy="1">↔ ＋</button><button type="button" data-action="pvScale" data-fx="0.87" data-fy="1">↔ －</button><button type="button" data-action="pvScale" data-fx="1" data-fy="1.15">↕ ＋</button><button type="button" data-action="pvScale" data-fx="1" data-fy="0.87">↕ －</button>` : ''}
+          ${t==='line' ? `<button type="button" data-action="pvThick" data-f="1.25">עבה</button><button type="button" data-action="pvThick" data-f="0.8">דק</button>` : ''}
+          <button type="button" class="danger" data-action="pvDelShape">🗑 מחק</button>
+          <button type="button" data-action="pvNewMark">✓ סיום בחירה</button>
+        </div></div>`; })()
+      : `<div class="pvdim">לחץ על סימון קיים כדי לבחור אותו (הזזה / הגדלה / מחיקה), או לחץ על התוכנית להוספת סימון חדש.</div>`}`;
 }
 
 /* ---- "whole room" tool: tap inside a room, it floods up to the walls (dark lines) of the drawing.
@@ -4520,8 +4644,8 @@ function showConfirm(message, opts={}){
     const title = opts.title || 'אישור פעולה';
     const okLabel = opts.okLabel || 'אישור';
     const cancelLabel = opts.cancelLabel || 'ביטול';
-    const okClass = opts.danger ? 'btn-danger' : 'btn-primary';
-    const html = `<div class="overlay" id="dialogOverlay">
+    const okClass = opts.red ? 'btn-danger-solid' : (opts.danger ? 'btn-danger' : 'btn-primary');
+    const html = `<div class="overlay ${opts.red?'dialog-red':''}" id="dialogOverlay">
       <div class="sheet">
         <div class="sheet-head"><h3>${esc(title)}</h3></div>
         <div class="dialog-msg">${esc(message).replace(/\n/g,'<br>')}</div>
@@ -4859,8 +4983,10 @@ document.addEventListener('click', async (e)=>{
     case 'pvFit': pvFit(); break;
     case 'pvExport': pvExportPng(); break;
     case 'pvUndo': pvUndo(); break;
-    case 'pvNewMark': PV.cur=null; pvRefresh(); break;
-    case 'pvDelMark': pvDeleteCur(); break;
+    case 'pvNewMark': PV.cur=null; PV.selIdx=-1; pvRefresh(); break;
+    case 'pvDelMark': case 'pvDelShape': pvDeleteShape(); break;
+    case 'pvScale': pvScaleSel(parseFloat(action.getAttribute('data-fx'))||1, parseFloat(action.getAttribute('data-fy'))||1); break;
+    case 'pvThick': pvThickSel(parseFloat(action.getAttribute('data-f'))||1); break;
     case 'pvFilter': { const k=action.getAttribute('data-kind'); PV.filter[k]=!PV.filter[k]; PV.sel=null; pvRefresh(); break; }
     case 'pvOpenRecord': {
       const kind=action.getAttribute('data-kind'), id=action.getAttribute('data-id');
@@ -4906,19 +5032,23 @@ document.addEventListener('click', async (e)=>{
     case 'goBack': goBack(); break;
     case 'openQuickAdd': openQuickAdd(action.getAttribute('data-kind')); break;
 
-    case 'openWorkerPicker': openWorkerPicker(); break;
+    case 'openWorkerPicker': openWorkerPicker(action.getAttribute('data-holder')); break;
     case 'toggleWorker': {
       const id = action.getAttribute('data-id');
-      const draft = state.formDraft;
-      const i = draft.workerIds.indexOf(id);
-      if(i>=0) draft.workerIds.splice(i,1); else draft.workerIds.push(id);
+      const draft = state[state._workerHolder || 'formDraft'];
       const searchVal = document.getElementById('workerSearchInput') ? document.getElementById('workerSearchInput').value : '';
+      const i = draft.workerIds.indexOf(id);
+      if(i>=0){
+        if(!(await confirmRemoveWorker(id))){ renderWorkerPickerModal(searchVal); break; }
+        draft.workerIds.splice(i,1);
+      } else draft.workerIds.push(id);
       renderWorkerPickerModal(searchVal);
       break;
     }
     case 'removeWorkerChip': {
       const id = action.getAttribute('data-id');
-      const draft = state.formDraft;
+      const draft = state[action.getAttribute('data-holder') || 'formDraft'];
+      if(!(await confirmRemoveWorker(id))) { render(); break; }
       draft.workerIds = draft.workerIds.filter(x=>x!==id);
       render();
       break;
@@ -5424,6 +5554,7 @@ document.addEventListener('click', async (e)=>{
         categoryId: draft.categoryId||'',
         locationPathIds: (draft.locationPathIds||[]).slice(),
         marks: (draft.marks||[]).slice(),
+        workerIds: (draft.workerIds||[]).slice(),
         priority: draft.priority || null,
         order: existing ? (existing.order ?? DB.tasks.length) : DB.tasks.length,
         createdAt: existing ? (existing.createdAt || Date.now()) : Date.now(),
