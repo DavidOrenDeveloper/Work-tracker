@@ -485,7 +485,7 @@ function toast(msg){
    APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
    screen in Settings. This is the only reliable signal, since the phone/browser can
    otherwise silently keep serving an old cached copy. */
-const APP_VERSION = "1.2.2";
+const APP_VERSION = "1.2.3";
 let _lastCheckedVersion = null;
 async function checkForUpdate(manual=false){
   try{
@@ -1291,6 +1291,8 @@ function viewReportForm(editId, duplicateFrom){
 /* ============================== WORKER PICKER MODAL ============================== */
 function openWorkerPicker(holder){
   state._workerHolder = holder || 'formDraft';
+  const dr = state[state._workerHolder]; // only workers already on the record when the picker opened need the red "are you sure"
+  state._workerInitial = new Set((dr && dr.workerIds) || []);
   pushModalHistory();
   const search = "";
   renderWorkerPickerModal(search);
@@ -5054,7 +5056,7 @@ document.addEventListener('click', async (e)=>{
       const searchVal = document.getElementById('workerSearchInput') ? document.getElementById('workerSearchInput').value : '';
       const i = draft.workerIds.indexOf(id);
       if(i>=0){
-        if(!(await confirmRemoveWorker(id))){ renderWorkerPickerModal(searchVal); break; }
+        if(state._workerInitial && state._workerInitial.has(id) && !(await confirmRemoveWorker(id))){ renderWorkerPickerModal(searchVal); break; }
         draft.workerIds.splice(i,1);
       } else draft.workerIds.push(id);
       renderWorkerPickerModal(searchVal);
