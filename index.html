@@ -485,7 +485,7 @@ function toast(msg){
    APP_VERSION — shows a banner offering an immediate refresh, and updates the "About"
    screen in Settings. This is the only reliable signal, since the phone/browser can
    otherwise silently keep serving an old cached copy. */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.2.2";
 let _lastCheckedVersion = null;
 async function checkForUpdate(manual=false){
   try{
@@ -1321,6 +1321,7 @@ function renderWorkerPickerModal(search){
             <button class="closebtn" data-action="closeModal">✕</button>
           </div>
         </div>
+        <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:10px;" data-action="addNewWorkerInPicker">✚ הוסף עובד חדש</button>
         <input type="search" class="search-in-modal" id="workerSearchInput" placeholder="חיפוש עובד…" value="${esc(search)}">
         <div id="workerListWrap">
           ${workers.length===0 ? `<div class="empty"><div class="ic">👤</div>אין עובדים פעילים תואמים</div>` :
@@ -5033,6 +5034,20 @@ document.addEventListener('click', async (e)=>{
     case 'openQuickAdd': openQuickAdd(action.getAttribute('data-kind')); break;
 
     case 'openWorkerPicker': openWorkerPicker(action.getAttribute('data-holder')); break;
+    case 'addNewWorkerInPicker': {
+      const draft = state[state._workerHolder || 'formDraft'];
+      const nm = await showPrompt('שם העובד החדש', '', 'שם מלא');
+      if(nm && nm.trim()){
+        const obj = {id:uid(), name:nm.trim(), active:true, order:DB.workers.length, createdAt:Date.now()};
+        DB.workers.push(obj);
+        await saveCollection('workers');
+        if(!draft.workerIds) draft.workerIds = [];
+        draft.workerIds.push(obj.id);
+        toast('העובד נוסף ונבחר');
+      }
+      renderWorkerPickerModal('');
+      break;
+    }
     case 'toggleWorker': {
       const id = action.getAttribute('data-id');
       const draft = state[state._workerHolder || 'formDraft'];
